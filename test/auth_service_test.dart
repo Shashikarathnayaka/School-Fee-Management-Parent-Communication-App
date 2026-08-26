@@ -18,20 +18,20 @@ void main() {
       expect(isAuth, false);
     });
 
-    test('login with valid credentials sets isAuthenticated to true', () async {
+    test('login with valid development credentials sets isAuthenticated to true', () async {
       final success = await authService.login(
-        emailOrPhone: 'parent@school.com',
-        password: 'password123',
+        emailOrPhone: 'parent@test.com',
+        password: 'Parent@123',
       );
 
       expect(success, true);
       expect(authService.isAuthenticated, true);
     });
 
-    test('login with empty credentials returns false', () async {
+    test('login with invalid credentials returns false', () async {
       final success = await authService.login(
-        emailOrPhone: '',
-        password: '123',
+        emailOrPhone: 'wrong@test.com',
+        password: 'wrongpassword',
       );
 
       expect(success, false);
@@ -51,8 +51,8 @@ void main() {
 
     test('logout resets isAuthenticated to false', () async {
       await authService.login(
-        emailOrPhone: 'parent@school.com',
-        password: 'password123',
+        emailOrPhone: 'parent@test.com',
+        password: 'Parent@123',
       );
       expect(authService.isAuthenticated, true);
 

@@ -6,6 +6,10 @@ import '../../features/auth/presentation/screens/login_screen.dart';
 import '../../features/auth/presentation/screens/registration_screen.dart';
 import '../../features/auth/presentation/screens/splash_screen.dart';
 import '../../features/home/presentation/screens/home_screen.dart';
+import '../../features/notifications/presentation/screens/notifications_screen.dart';
+import '../../features/payments/presentation/screens/payments_screen.dart';
+import '../../features/profile/presentation/screens/profile_screen.dart';
+import '../../features/receipts/presentation/screens/receipts_screen.dart';
 
 abstract class AppRouter {
   static GoRouter createRouter(AuthService authService) {
@@ -32,6 +36,26 @@ abstract class AppRouter {
           path: AppRoutes.home,
           name: AppRoutes.homeName,
           builder: (context, state) => HomeScreen(authService: authService),
+        ),
+        GoRoute(
+          path: AppRoutes.payments,
+          name: AppRoutes.paymentsName,
+          builder: (context, state) => const PaymentsScreen(),
+        ),
+        GoRoute(
+          path: AppRoutes.notifications,
+          name: AppRoutes.notificationsName,
+          builder: (context, state) => const NotificationsScreen(),
+        ),
+        GoRoute(
+          path: AppRoutes.profile,
+          name: AppRoutes.profileName,
+          builder: (context, state) => ProfileScreen(authService: authService),
+        ),
+        GoRoute(
+          path: AppRoutes.receipts,
+          name: AppRoutes.receiptsName,
+          builder: (context, state) => const ReceiptsScreen(),
         ),
       ],
     );

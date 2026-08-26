@@ -23,6 +23,10 @@ abstract class AuthService extends ChangeNotifier {
 
 /// Lightweight mock implementation of AuthService for development phase.
 class MockAuthService extends AuthService {
+  // Development-only test credentials
+  static const String devEmail = 'parent@test.com';
+  static const String devPassword = 'Parent@123';
+
   bool _isAuthenticated = false;
 
   @override
@@ -32,7 +36,6 @@ class MockAuthService extends AuthService {
   Future<bool> checkAuthStatus() async {
     // Simulate brief check delay
     await Future.delayed(const Duration(milliseconds: 300));
-    // Default to unauthenticated per requirements
     return _isAuthenticated;
   }
 
@@ -42,9 +45,10 @@ class MockAuthService extends AuthService {
     required String password,
   }) async {
     // Simulate network delay
-    await Future.delayed(const Duration(milliseconds: 1200));
+    await Future.delayed(const Duration(milliseconds: 800));
 
-    if (emailOrPhone.trim().isNotEmpty && password.length >= 6) {
+    final trimmed = emailOrPhone.trim().toLowerCase();
+    if (trimmed == devEmail.toLowerCase() && password == devPassword) {
       _isAuthenticated = true;
       notifyListeners();
       return true;
@@ -60,13 +64,12 @@ class MockAuthService extends AuthService {
     required String password,
   }) async {
     // Simulate network delay
-    await Future.delayed(const Duration(milliseconds: 1200));
+    await Future.delayed(const Duration(milliseconds: 800));
 
     if (fullName.isNotEmpty &&
         email.isNotEmpty &&
         mobileNumber.isNotEmpty &&
         password.length >= 6) {
-      // Registration successful; user will still sign in or be logged in
       return true;
     }
     return false;

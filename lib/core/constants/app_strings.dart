@@ -47,6 +47,37 @@ abstract class AppStrings {
   static const String passwordMismatch = 'Passwords do not match';
   static const String mustAcceptTerms = 'You must accept the Terms & Conditions to proceed';
 
+  // Authentication errors & demo hint
+  static const String invalidCredentials = 'Invalid email or password';
+  static const String demoAccountHintHeader = 'Demo Account (Development Only)';
+  static const String demoAccountHintBody = 'Email: parent@test.com\nPassword: Parent@123';
+
+  // Home Dashboard
+  static const String greetingPrefix = 'Good Morning, ';
+  static const String homeSubtitle = "Manage your child's school fees easily.";
+  static const String studentTitle = 'Student';
+  static const String viewDetails = 'View Details';
+  static const String feeSummaryTitle = 'School Fee';
+  static const String payNowButton = 'Pay Now';
+  static const String quickActionsTitle = 'Quick Actions';
+  static const String recentPaymentsTitle = 'Recent Payments';
+  static const String upcomingFeeTitle = 'Next Payment';
+  static const String latestUpdatesTitle = 'Latest Updates';
+  static const String viewAll = 'View All';
+
+  // Navigation Tabs
+  static const String navHome = 'Home';
+  static const String navPayments = 'Payments';
+  static const String navNotifications = 'Notifications';
+  static const String navProfile = 'Profile';
+  static const String navReceipts = 'Receipts';
+
+  // Module Placeholders
+  static const String paymentModulePlaceholder = 'Payment module coming soon';
+  static const String paymentHistoryPlaceholder = 'Payment history feature coming soon';
+  static const String receiptsPlaceholder = 'Receipts feature coming soon';
+  static const String notificationsPlaceholder = 'Notifications feature coming soon';
+
   // Placeholders
   static const String forgotPasswordNotice = 'Forgot password functionality will be available in the next release.';
   static const String mockLoginSuccess = 'Login successful! Navigating to home...';
