@@ -1,8 +1,11 @@
 import 'package:flutter/foundation.dart';
+import '../models/auth_user.dart';
+import '../models/user_role.dart';
 
 /// Abstract AuthService defining the contract for authentication actions.
 abstract class AuthService extends ChangeNotifier {
   bool get isAuthenticated;
+  AuthUser? get currentUser;
 
   Future<bool> checkAuthStatus();
 
@@ -24,19 +27,25 @@ abstract class AuthService extends ChangeNotifier {
 /// Lightweight mock implementation of AuthService for development phase.
 class MockAuthService extends AuthService {
   // Development-only test credentials
-  static const String devEmail = 'parent@test.com';
-  static const String devPassword = 'Parent@123';
+  static const String devParentEmail = 'parent@test.com';
+  static const String devParentPassword = 'Parent@123';
 
-  bool _isAuthenticated = false;
+  static const String devDriverEmail = 'driver@test.com';
+  static const String devDriverPassword = 'Driver@123';
+
+  AuthUser? _currentUser;
 
   @override
-  bool get isAuthenticated => _isAuthenticated;
+  bool get isAuthenticated => _currentUser != null;
+
+  @override
+  AuthUser? get currentUser => _currentUser;
 
   @override
   Future<bool> checkAuthStatus() async {
     // Simulate brief check delay
     await Future.delayed(const Duration(milliseconds: 300));
-    return _isAuthenticated;
+    return isAuthenticated;
   }
 
   @override
@@ -48,11 +57,29 @@ class MockAuthService extends AuthService {
     await Future.delayed(const Duration(milliseconds: 800));
 
     final trimmed = emailOrPhone.trim().toLowerCase();
-    if (trimmed == devEmail.toLowerCase() && password == devPassword) {
-      _isAuthenticated = true;
+
+    if (trimmed == devParentEmail.toLowerCase() && password == devParentPassword) {
+      _currentUser = const AuthUser(
+        id: 'usr_parent_01',
+        name: 'Shashi Karathnayaka',
+        email: devParentEmail,
+        role: UserRole.parent,
+      );
       notifyListeners();
       return true;
     }
+
+    if (trimmed == devDriverEmail.toLowerCase() && password == devDriverPassword) {
+      _currentUser = const AuthUser(
+        id: 'usr_driver_01',
+        name: 'Kamal Silva',
+        email: devDriverEmail,
+        role: UserRole.driver,
+      );
+      notifyListeners();
+      return true;
+    }
+
     return false;
   }
 
@@ -78,7 +105,8 @@ class MockAuthService extends AuthService {
   @override
   Future<void> logout() async {
     await Future.delayed(const Duration(milliseconds: 300));
-    _isAuthenticated = false;
+    _currentUser = null;
     notifyListeners();
   }
 }
+

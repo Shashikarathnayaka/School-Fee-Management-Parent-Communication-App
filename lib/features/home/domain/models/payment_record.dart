@@ -7,6 +7,10 @@ class PaymentRecord {
   final String amount;
   final FeeStatus status;
   final bool hasReceipt;
+  final String parentId;
+  final String studentId;
+  final String driverId;
+  final String studentName;
 
   const PaymentRecord({
     required this.id,
@@ -15,5 +19,9 @@ class PaymentRecord {
     required this.amount,
     required this.status,
     this.hasReceipt = true,
+    this.parentId = '',
+    this.studentId = '',
+    this.driverId = '',
+    this.studentName = '',
   });
 }

@@ -49,8 +49,9 @@ abstract class AppStrings {
 
   // Authentication errors & demo hint
   static const String invalidCredentials = 'Invalid email or password';
-  static const String demoAccountHintHeader = 'Demo Account (Development Only)';
-  static const String demoAccountHintBody = 'Email: parent@test.com\nPassword: Parent@123';
+  static const String demoAccountHintHeader = 'Demo Accounts (Development Only)';
+  static const String demoAccountHintBody = 'Parent: parent@test.com | Password: Parent@123\nDriver: driver@test.com | Password: Driver@123';
+
 
   // Home Dashboard
   static const String greetingPrefix = 'Good Morning, ';

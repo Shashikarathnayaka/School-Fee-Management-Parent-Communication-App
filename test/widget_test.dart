@@ -5,7 +5,7 @@ import 'package:nd_smart_schoolpay/core/constants/app_strings.dart';
 import 'package:nd_smart_schoolpay/core/services/auth_service.dart';
 
 void main() {
-  group('N&D Smart SchoolPay App Flow Tests', () {
+  group('N&D Smart SchoolPay Role-Based App Flow Tests', () {
     late MockAuthService mockAuthService;
 
     setUp(() {
@@ -56,31 +56,89 @@ void main() {
       expect(find.text(AppStrings.welcomeBack), findsOneWidget);
     });
 
-    testWidgets('Logs in successfully with test credentials and renders Home Dashboard', (WidgetTester tester) async {
+    testWidgets('Logs in successfully as Parent and renders Parent Dashboard', (WidgetTester tester) async {
       await tester.pumpWidget(SmartSchoolPayApp(authService: mockAuthService));
 
       // Skip splash transition
       await tester.pump(const Duration(seconds: 2));
       await tester.pumpAndSettle();
 
-      // Enter test credentials
+      // Enter Parent test credentials
       final textFields = find.byType(TextField);
       await tester.enterText(textFields.at(0), 'parent@test.com');
       await tester.enterText(textFields.at(1), 'Parent@123');
 
       // Tap Sign In
       await tester.tap(find.text(AppStrings.signInButton));
-      await tester.pump(); // Start animation/async login
+      await tester.pump();
 
       // Advance time past the login mock delay
       await tester.pump(const Duration(milliseconds: 1000));
       await tester.pumpAndSettle();
 
-      // Verify HomeScreen dashboard is loaded
-      expect(find.textContaining('Good Morning, Shashi'), findsOneWidget);
+      // Verify Parent Dashboard is loaded
+      expect(find.textContaining('Good Morning, Shashi Karathnayaka'), findsOneWidget);
       expect(find.text('Alex Johnson'), findsAtLeastNWidgets(1));
       expect(find.text('Rs. 15,000'), findsAtLeastNWidgets(1));
       expect(find.text(AppStrings.payNowButton), findsOneWidget);
+    });
+
+    testWidgets('Logs in successfully as Driver and renders Driver Dashboard', (WidgetTester tester) async {
+      await tester.pumpWidget(SmartSchoolPayApp(authService: mockAuthService));
+
+      // Skip splash transition
+      await tester.pump(const Duration(seconds: 2));
+      await tester.pumpAndSettle();
+
+      // Enter Driver test credentials
+      final textFields = find.byType(TextField);
+      await tester.enterText(textFields.at(0), 'driver@test.com');
+      await tester.enterText(textFields.at(1), 'Driver@123');
+
+      // Tap Sign In
+      await tester.tap(find.text(AppStrings.signInButton));
+      await tester.pump();
+
+      // Advance time past the login mock delay
+      await tester.pump(const Duration(milliseconds: 1000));
+      await tester.pumpAndSettle();
+
+      // Verify Driver Dashboard is loaded
+      expect(find.textContaining('Good Morning, Kamal Silva'), findsOneWidget);
+      expect(find.text("Today's Route"), findsAtLeastNWidgets(1));
+      expect(find.text('Driver Status'), findsOneWidget);
+      expect(find.text('On Duty'), findsOneWidget);
+      expect(find.text("Today's Pickups"), findsOneWidget);
+
+      // Verify Parent specific content is NOT displayed
+      expect(find.text('Rs. 15,000'), findsNothing);
+      expect(find.text(AppStrings.payNowButton), findsNothing);
+    });
+
+
+    testWidgets('Displays error on invalid credentials and stays on Login screen', (WidgetTester tester) async {
+      await tester.pumpWidget(SmartSchoolPayApp(authService: mockAuthService));
+
+      // Skip splash transition
+      await tester.pump(const Duration(seconds: 2));
+      await tester.pumpAndSettle();
+
+      // Enter invalid credentials
+      final textFields = find.byType(TextField);
+      await tester.enterText(textFields.at(0), 'wrong@test.com');
+      await tester.enterText(textFields.at(1), 'wrongpass');
+
+      // Tap Sign In
+      await tester.tap(find.text(AppStrings.signInButton));
+      await tester.pump();
+
+      // Advance time past mock delay
+      await tester.pump(const Duration(milliseconds: 1000));
+      await tester.pumpAndSettle();
+
+      // Verify error snackbar appears and still on Login screen
+      expect(find.text(AppStrings.invalidCredentials), findsOneWidget);
+      expect(find.text(AppStrings.welcomeBack), findsOneWidget);
     });
   });
 }

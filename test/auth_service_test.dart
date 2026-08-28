@@ -1,4 +1,5 @@
 import 'package:flutter_test/flutter_test.dart';
+import 'package:nd_smart_schoolpay/core/models/user_role.dart';
 import 'package:nd_smart_schoolpay/core/services/auth_service.dart';
 
 void main() {
@@ -9,8 +10,9 @@ void main() {
       authService = MockAuthService();
     });
 
-    test('Initial auth state should be false', () {
+    test('Initial auth state should be false and currentUser null', () {
       expect(authService.isAuthenticated, false);
+      expect(authService.currentUser, null);
     });
 
     test('checkAuthStatus returns false initially', () async {
@@ -18,7 +20,7 @@ void main() {
       expect(isAuth, false);
     });
 
-    test('login with valid development credentials sets isAuthenticated to true', () async {
+    test('login with valid parent credentials authenticates as UserRole.parent', () async {
       final success = await authService.login(
         emailOrPhone: 'parent@test.com',
         password: 'Parent@123',
@@ -26,9 +28,23 @@ void main() {
 
       expect(success, true);
       expect(authService.isAuthenticated, true);
+      expect(authService.currentUser?.role, UserRole.parent);
+      expect(authService.currentUser?.email, 'parent@test.com');
     });
 
-    test('login with invalid credentials returns false', () async {
+    test('login with valid driver credentials authenticates as UserRole.driver', () async {
+      final success = await authService.login(
+        emailOrPhone: 'driver@test.com',
+        password: 'Driver@123',
+      );
+
+      expect(success, true);
+      expect(authService.isAuthenticated, true);
+      expect(authService.currentUser?.role, UserRole.driver);
+      expect(authService.currentUser?.email, 'driver@test.com');
+    });
+
+    test('login with invalid credentials returns false and keeps currentUser null', () async {
       final success = await authService.login(
         emailOrPhone: 'wrong@test.com',
         password: 'wrongpassword',
@@ -36,6 +52,7 @@ void main() {
 
       expect(success, false);
       expect(authService.isAuthenticated, false);
+      expect(authService.currentUser, null);
     });
 
     test('register with valid details returns true', () async {
@@ -49,7 +66,7 @@ void main() {
       expect(success, true);
     });
 
-    test('logout resets isAuthenticated to false', () async {
+    test('logout resets isAuthenticated to false and clears currentUser', () async {
       await authService.login(
         emailOrPhone: 'parent@test.com',
         password: 'Parent@123',
@@ -58,6 +75,7 @@ void main() {
 
       await authService.logout();
       expect(authService.isAuthenticated, false);
+      expect(authService.currentUser, null);
     });
   });
 }
