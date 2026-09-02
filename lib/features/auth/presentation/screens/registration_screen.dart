@@ -108,7 +108,7 @@ class _RegistrationScreenState extends State<RegistrationScreen> {
       _isLoading = true;
     });
 
-    final success = await widget.authService.register(
+    final success = await widget.authService.registerParent(
       fullName: _fullNameController.text.trim(),
       email: _emailController.text.trim(),
       mobileNumber: _mobileController.text.trim(),

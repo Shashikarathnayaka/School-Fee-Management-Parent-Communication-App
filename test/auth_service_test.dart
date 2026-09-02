@@ -55,12 +55,25 @@ void main() {
       expect(authService.currentUser, null);
     });
 
-    test('register with valid details returns true', () async {
-      final success = await authService.register(
+    test('registerParent with valid details returns true', () async {
+      final success = await authService.registerParent(
         fullName: 'John Doe',
         email: 'john@example.com',
         mobileNumber: '0771234567',
         password: 'password123',
+      );
+
+      expect(success, true);
+    });
+
+    test('registerDriver with valid details returns true', () async {
+      final success = await authService.registerDriver(
+        fullName: 'Alex Driver',
+        email: 'alex@example.com',
+        mobileNumber: '0987654321',
+        password: 'password123',
+        vanNumber: 'VAN-999',
+        licenseNo: 'LIC-111',
       );
 
       expect(success, true);

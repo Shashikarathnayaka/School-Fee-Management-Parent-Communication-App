@@ -14,11 +14,20 @@ abstract class AuthService extends ChangeNotifier {
     required String password,
   });
 
-  Future<bool> register({
+  Future<bool> registerParent({
     required String fullName,
     required String email,
     required String mobileNumber,
     required String password,
+  });
+
+  Future<bool> registerDriver({
+    required String fullName,
+    required String email,
+    required String mobileNumber,
+    required String password,
+    required String vanNumber,
+    required String licenseNo,
   });
 
   Future<void> logout();
@@ -84,7 +93,7 @@ class MockAuthService extends AuthService {
   }
 
   @override
-  Future<bool> register({
+  Future<bool> registerParent({
     required String fullName,
     required String email,
     required String mobileNumber,
@@ -97,6 +106,29 @@ class MockAuthService extends AuthService {
         email.isNotEmpty &&
         mobileNumber.isNotEmpty &&
         password.length >= 6) {
+      return true;
+    }
+    return false;
+  }
+
+  @override
+  Future<bool> registerDriver({
+    required String fullName,
+    required String email,
+    required String mobileNumber,
+    required String password,
+    required String vanNumber,
+    required String licenseNo,
+  }) async {
+    // Simulate network delay
+    await Future.delayed(const Duration(milliseconds: 800));
+
+    if (fullName.isNotEmpty &&
+        email.isNotEmpty &&
+        mobileNumber.isNotEmpty &&
+        password.length >= 6 &&
+        vanNumber.isNotEmpty &&
+        licenseNo.isNotEmpty) {
       return true;
     }
     return false;

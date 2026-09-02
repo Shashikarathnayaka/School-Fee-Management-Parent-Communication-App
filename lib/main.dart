@@ -1,10 +1,15 @@
 import 'package:flutter/material.dart';
 
 import 'app/app.dart';
-import 'core/services/auth_service.dart';
+import 'core/services/service_locator.dart';
 
-void main() {
+void main() async {
   WidgetsFlutterBinding.ensureInitialized();
-  final authService = MockAuthService();
-  runApp(SmartSchoolPayApp(authService: authService));
+  
+  // Initialize all core services and dependencies
+  await ServiceLocator.instance.init();
+  
+  runApp(SmartSchoolPayApp(
+    authService: ServiceLocator.instance.authService,
+  ));
 }
