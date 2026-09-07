@@ -4,10 +4,12 @@ import 'package:go_router/go_router.dart';
 import '../../../../app/theme/app_colors.dart';
 import '../../../../core/constants/app_routes.dart';
 import '../../../../core/constants/app_strings.dart';
+import '../../../../core/models/student.dart';
 import '../../../../core/models/user_role.dart';
 import '../../../../core/services/auth_service.dart';
+import '../../../../core/services/parent_api_service.dart';
+import '../../../../core/services/student_list_notifier.dart';
 import '../../data/mock_home_data.dart';
-import '../../domain/models/student.dart';
 import '../widgets/app_bottom_nav_bar.dart';
 import '../widgets/fee_summary_card.dart';
 import '../widgets/notification_preview_card.dart';
@@ -19,10 +21,14 @@ import '../widgets/upcoming_fee_card.dart';
 
 class ParentHomeView extends StatefulWidget {
   final AuthService authService;
+  final ParentApiService? parentApiService;
+  final StudentListNotifier? studentListNotifier;
 
   const ParentHomeView({
     super.key,
     required this.authService,
+    this.parentApiService,
+    this.studentListNotifier,
   });
 
   @override
@@ -30,12 +36,163 @@ class ParentHomeView extends StatefulWidget {
 }
 
 class _ParentHomeViewState extends State<ParentHomeView> {
-  late Student _selectedStudent;
+  late StudentListNotifier _studentListNotifier;
+  Student? _selectedStudent;
+
+  /// Session-level flag to avoid showing the become-driver popup repeatedly.
+  /// Resets on app restart (static so it persists across widget rebuilds).
+  static bool _becomeDriverDismissed = false;
 
   @override
   void initState() {
     super.initState();
-    _selectedStudent = MockHomeData.students.first;
+    _initNotifier();
+    _studentListNotifier.addListener(_onStudentListChanged);
+    _syncSelectedStudent();
+    _studentListNotifier.fetchStudents();
+
+    // Show become-driver popup after the first frame if the parent
+    // hasn't already registered as a driver and hasn't dismissed it this session.
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      _maybeShowBecomeDriverDialog();
+    });
+  }
+
+  void _initNotifier() {
+    if (widget.studentListNotifier != null) {
+      _studentListNotifier = widget.studentListNotifier!;
+    } else {
+      _studentListNotifier = StudentListNotifier(
+        widget.parentApiService ?? ParentApiService(),
+      );
+    }
+  }
+
+  @override
+  void didUpdateWidget(ParentHomeView oldWidget) {
+    super.didUpdateWidget(oldWidget);
+    if (oldWidget.studentListNotifier != widget.studentListNotifier ||
+        oldWidget.parentApiService != widget.parentApiService) {
+      _studentListNotifier.removeListener(_onStudentListChanged);
+      _initNotifier();
+      _studentListNotifier.addListener(_onStudentListChanged);
+      _onStudentListChanged();
+    }
+  }
+
+  @override
+  void dispose() {
+    _studentListNotifier.removeListener(_onStudentListChanged);
+    super.dispose();
+  }
+
+  void _onStudentListChanged() {
+    if (!mounted) return;
+    setState(() {
+      _syncSelectedStudent();
+    });
+  }
+
+  void _syncSelectedStudent() {
+    final students = _studentListNotifier.students;
+    if (students.isNotEmpty) {
+      if (_selectedStudent == null ||
+          !students.any((s) => s.id == _selectedStudent!.id)) {
+        _selectedStudent = students.first;
+      }
+    } else {
+      _selectedStudent = null;
+    }
+  }
+
+  void _maybeShowBecomeDriverDialog() {
+    if (_becomeDriverDismissed) return;
+
+    // TODO: Replace MockHomeData.parentProfile with the real fetched profile
+    // once GET /parent/profile returns has_driver_profile from the backend.
+    final profile = MockHomeData.parentProfile;
+    if (profile.hasDriverProfile) return;
+
+    showDialog(
+      context: context,
+      barrierDismissible: true,
+      builder: (dialogContext) {
+        return AlertDialog(
+          backgroundColor: AppColors.surfaceWhite,
+          shape: RoundedRectangleBorder(
+            borderRadius: BorderRadius.circular(20),
+          ),
+          icon: Container(
+            padding: const EdgeInsets.all(12),
+            decoration: BoxDecoration(
+              color: AppColors.accentTeal.withValues(alpha: 0.1),
+              shape: BoxShape.circle,
+            ),
+            child: const Icon(
+              Icons.airport_shuttle_rounded,
+              color: AppColors.accentTeal,
+              size: 32,
+            ),
+          ),
+          title: const Text(
+            AppStrings.becomeDriverDialogTitle,
+            style: TextStyle(
+              color: AppColors.primaryNavy,
+              fontWeight: FontWeight.bold,
+              fontSize: 18,
+            ),
+          ),
+          content: const Text(
+            AppStrings.becomeDriverDialogContent,
+            textAlign: TextAlign.center,
+            style: TextStyle(
+              color: AppColors.textSecondary,
+              fontSize: 14,
+              height: 1.5,
+            ),
+          ),
+          actionsAlignment: MainAxisAlignment.center,
+          actions: [
+            TextButton(
+              onPressed: () {
+                _becomeDriverDismissed = true;
+                Navigator.of(dialogContext).pop();
+              },
+              child: const Text(
+                AppStrings.becomeDriverNotNow,
+                style: TextStyle(
+                  color: AppColors.textSecondary,
+                  fontWeight: FontWeight.w600,
+                ),
+              ),
+            ),
+            const SizedBox(width: 8),
+            ElevatedButton(
+              onPressed: () {
+                _becomeDriverDismissed = true;
+                Navigator.of(dialogContext).pop();
+                context.go(AppRoutes.becomeDriver);
+              },
+              style: ElevatedButton.styleFrom(
+                backgroundColor: AppColors.accentTeal,
+                foregroundColor: AppColors.surfaceWhite,
+                shape: RoundedRectangleBorder(
+                  borderRadius: BorderRadius.circular(12),
+                ),
+                padding: const EdgeInsets.symmetric(
+                  horizontal: 24,
+                  vertical: 12,
+                ),
+              ),
+              child: const Text(
+                AppStrings.becomeDriverUpdate,
+                style: TextStyle(fontWeight: FontWeight.bold),
+              ),
+            ),
+          ],
+        );
+      },
+    );
   }
 
   void _showPlaceholderNotice(String message) {
@@ -71,7 +228,8 @@ class _ParentHomeViewState extends State<ParentHomeView> {
   @override
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
-    final parentName = widget.authService.currentUser?.name ?? MockHomeData.parentName;
+    final parentName =
+        widget.authService.currentUser?.name ?? MockHomeData.parentName;
 
     return Scaffold(
       backgroundColor: AppColors.backgroundLight,
@@ -141,19 +299,91 @@ class _ParentHomeViewState extends State<ParentHomeView> {
               ),
               const SizedBox(height: 20),
 
-              // Student Card
-              StudentCard(
-                student: _selectedStudent,
-                allStudents: MockHomeData.students,
-                onStudentChanged: (student) {
-                  setState(() {
-                    _selectedStudent = student;
-                  });
-                },
-                onViewDetails: () {
-                  _showPlaceholderNotice('Student profile details coming soon');
-                },
-              ),
+              // Student Card Section
+              if (_studentListNotifier.isLoading)
+                Container(
+                  height: 120,
+                  decoration: BoxDecoration(
+                    color: AppColors.surfaceWhite,
+                    borderRadius: BorderRadius.circular(16),
+                    border: Border.all(color: AppColors.cardBorder),
+                  ),
+                  alignment: Alignment.center,
+                  child: const CircularProgressIndicator(
+                    strokeWidth: 2.5,
+                    valueColor: AlwaysStoppedAnimation<Color>(
+                      AppColors.primaryBlue,
+                    ),
+                  ),
+                )
+              else if (_studentListNotifier.hasFetchError ||
+                  (_studentListNotifier.students.isNotEmpty &&
+                      _selectedStudent != null))
+                StudentCard(
+                  student: _selectedStudent!,
+                  allStudents: _studentListNotifier.students,
+                  onStudentChanged: (student) {
+                    setState(() {
+                      _selectedStudent = student;
+                    });
+                  },
+                  onViewDetails: () {
+                    _showPlaceholderNotice(
+                      'Student profile details coming soon',
+                    );
+                  },
+                )
+              else
+                // Empty State: zero students successfully loaded (not an error state)
+                Container(
+                  width: double.infinity,
+                  decoration: BoxDecoration(
+                    color: AppColors.surfaceWhite,
+                    borderRadius: BorderRadius.circular(16),
+                    border: Border.all(color: AppColors.cardBorder, width: 1),
+                    boxShadow: [
+                      BoxShadow(
+                        color: Colors.black.withValues(alpha: 0.03),
+                        blurRadius: 10,
+                        offset: const Offset(0, 4),
+                      ),
+                    ],
+                  ),
+                  padding: const EdgeInsets.all(20),
+                  child: Column(
+                    children: [
+                      Container(
+                        padding: const EdgeInsets.all(12),
+                        decoration: const BoxDecoration(
+                          color: AppColors.primaryBlueLight,
+                          shape: BoxShape.circle,
+                        ),
+                        child: const Icon(
+                          Icons.school_outlined,
+                          size: 32,
+                          color: AppColors.primaryBlue,
+                        ),
+                      ),
+                      const SizedBox(height: 12),
+                      Text(
+                        AppStrings.noStudentsTitle,
+                        style: theme.textTheme.titleMedium?.copyWith(
+                          fontWeight: FontWeight.bold,
+                          color: AppColors.primaryNavy,
+                        ),
+                      ),
+                      const SizedBox(height: 4),
+                      Text(
+                        'No students added yet — add one from your Profile',
+                        textAlign: TextAlign.center,
+                        style: theme.textTheme.bodyMedium?.copyWith(
+                          color: AppColors.textSecondary,
+                          fontSize: 13,
+                        ),
+                      ),
+                    ],
+                  ),
+                ),
               const SizedBox(height: 20),
 
               // Fee Summary Card
@@ -179,8 +409,9 @@ class _ParentHomeViewState extends State<ParentHomeView> {
                   QuickActionItem(
                     label: 'Pay Fees',
                     icon: Icons.payment_rounded,
-                    onTap: () =>
-                        _showPlaceholderNotice(AppStrings.paymentModulePlaceholder),
+                    onTap: () => _showPlaceholderNotice(
+                      AppStrings.paymentModulePlaceholder,
+                    ),
                   ),
                   QuickActionItem(
                     label: 'Payment History',
@@ -207,9 +438,7 @@ class _ParentHomeViewState extends State<ParentHomeView> {
                 onViewAll: () => context.go(AppRoutes.payments),
               ),
               const SizedBox(height: 12),
-              RecentPaymentsCard(
-                payments: MockHomeData.recentPayments,
-              ),
+              RecentPaymentsCard(payments: MockHomeData.recentPayments),
               const SizedBox(height: 24),
 
               // Upcoming Fee
@@ -221,9 +450,7 @@ class _ParentHomeViewState extends State<ParentHomeView> {
                 ),
               ),
               const SizedBox(height: 12),
-              UpcomingFeeCard(
-                upcomingFee: MockHomeData.upcomingFee,
-              ),
+              UpcomingFeeCard(upcomingFee: MockHomeData.upcomingFee),
               const SizedBox(height: 24),
 
               // Latest Updates

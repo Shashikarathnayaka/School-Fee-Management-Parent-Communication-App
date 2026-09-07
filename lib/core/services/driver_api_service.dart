@@ -12,7 +12,7 @@ class DriverApiService {
   Future<DriverProfile?> getProfile() async {
     final response = await _apiClient.get(ApiConfig.driverProfile);
     if (response != null) {
-      return DriverProfile.fromJson(response);
+      return DriverProfile.fromJson(response['profile']);
     }
     return null;
   }
@@ -31,7 +31,7 @@ class DriverApiService {
 
     final response = await _apiClient.patch(ApiConfig.driverProfile, body: body);
     if (response != null) {
-      return DriverProfile.fromJson(response);
+      return DriverProfile.fromJson(response['profile']);
     }
     return null;
   }
@@ -53,15 +53,17 @@ class DriverApiService {
 
     final response = await _apiClient.post(ApiConfig.driverRoutes, body: body);
     if (response != null) {
-      return DriverRoute.fromJson(response);
+      return DriverRoute.fromJson(response['route']);
     }
     return null;
   }
 
   Future<List<DriverRoute>> getTodayRoutes() async {
     final response = await _apiClient.get(ApiConfig.driverRoutesToday);
-    if (response != null && response is List) {
-      return response.map((e) => DriverRoute.fromJson(e)).toList();
+    if (response != null && response['routes'] is List) {
+      return (response['routes'] as List)
+          .map((e) => DriverRoute.fromJson(e))
+          .toList();
     }
     return [];
   }
@@ -117,8 +119,10 @@ class DriverApiService {
 
   Future<List<AppNotification>> getNotifications() async {
     final response = await _apiClient.get(ApiConfig.driverNotifications);
-    if (response != null && response is List) {
-      return response.map((e) => AppNotification.fromJson(e)).toList();
+    if (response != null && response['notifications'] is List) {
+      return (response['notifications'] as List)
+          .map((e) => AppNotification.fromJson(e))
+          .toList();
     }
     return [];
   }

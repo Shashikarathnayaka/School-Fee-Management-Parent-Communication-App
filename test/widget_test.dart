@@ -2,18 +2,39 @@ import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:nd_smart_schoolpay/app/app.dart';
 import 'package:nd_smart_schoolpay/core/constants/app_strings.dart';
+import 'package:nd_smart_schoolpay/core/services/active_role_notifier.dart';
 import 'package:nd_smart_schoolpay/core/services/auth_service.dart';
+import 'package:nd_smart_schoolpay/core/services/parent_api_service.dart';
+import 'package:nd_smart_schoolpay/core/services/student_list_notifier.dart';
+import 'package:nd_smart_schoolpay/features/home/data/mock_home_data.dart';
 
 void main() {
   group('N&D Smart SchoolPay Role-Based App Flow Tests', () {
     late MockAuthService mockAuthService;
+    late ActiveRoleNotifier activeRoleNotifier;
+    late StudentListNotifier studentListNotifier;
+    late ParentApiService parentApiService;
 
     setUp(() {
       mockAuthService = MockAuthService();
+      activeRoleNotifier = ActiveRoleNotifier();
+      parentApiService = ParentApiService();
+      // Pre-seed with mock students so the Parent Dashboard test can verify
+      // the student card renders — in tests there's no real API, so we
+      // simulate the same state the app would have for a logged-in parent.
+      studentListNotifier = StudentListNotifier(
+        parentApiService,
+        initialStudents: MockHomeData.students,
+      );
     });
 
     testWidgets('Renders Splash Screen on launch', (WidgetTester tester) async {
-      await tester.pumpWidget(SmartSchoolPayApp(authService: mockAuthService));
+      await tester.pumpWidget(SmartSchoolPayApp(
+        authService: mockAuthService,
+        activeRoleNotifier: activeRoleNotifier,
+        studentListNotifier: studentListNotifier,
+        parentApiService: parentApiService,
+      ));
 
       // Verify Splash branding title and tagline are present
       expect(find.text(AppStrings.appName), findsOneWidget);
@@ -29,7 +50,12 @@ void main() {
     });
 
     testWidgets('Navigates from Login to Registration Screen and back', (WidgetTester tester) async {
-      await tester.pumpWidget(SmartSchoolPayApp(authService: mockAuthService));
+      await tester.pumpWidget(SmartSchoolPayApp(
+        authService: mockAuthService,
+        activeRoleNotifier: activeRoleNotifier,
+        studentListNotifier: studentListNotifier,
+        parentApiService: parentApiService,
+      ));
 
       // Skip splash
       await tester.pump(const Duration(seconds: 2));
@@ -57,7 +83,12 @@ void main() {
     });
 
     testWidgets('Logs in successfully as Parent and renders Parent Dashboard', (WidgetTester tester) async {
-      await tester.pumpWidget(SmartSchoolPayApp(authService: mockAuthService));
+      await tester.pumpWidget(SmartSchoolPayApp(
+        authService: mockAuthService,
+        activeRoleNotifier: activeRoleNotifier,
+        studentListNotifier: studentListNotifier,
+        parentApiService: parentApiService,
+      ));
 
       // Skip splash transition
       await tester.pump(const Duration(seconds: 2));
@@ -78,13 +109,18 @@ void main() {
 
       // Verify Parent Dashboard is loaded
       expect(find.textContaining('Good Morning, Shashi Karathnayaka'), findsOneWidget);
-      expect(find.text('Alex Johnson'), findsAtLeastNWidgets(1));
+      expect(find.text('Kaveesha Rathnayaka'), findsAtLeastNWidgets(1));
       expect(find.text('Rs. 15,000'), findsAtLeastNWidgets(1));
       expect(find.text(AppStrings.payNowButton), findsOneWidget);
     });
 
     testWidgets('Logs in successfully as Driver and renders Driver Dashboard', (WidgetTester tester) async {
-      await tester.pumpWidget(SmartSchoolPayApp(authService: mockAuthService));
+      await tester.pumpWidget(SmartSchoolPayApp(
+        authService: mockAuthService,
+        activeRoleNotifier: activeRoleNotifier,
+        studentListNotifier: studentListNotifier,
+        parentApiService: parentApiService,
+      ));
 
       // Skip splash transition
       await tester.pump(const Duration(seconds: 2));
@@ -117,7 +153,12 @@ void main() {
 
 
     testWidgets('Displays error on invalid credentials and stays on Login screen', (WidgetTester tester) async {
-      await tester.pumpWidget(SmartSchoolPayApp(authService: mockAuthService));
+      await tester.pumpWidget(SmartSchoolPayApp(
+        authService: mockAuthService,
+        activeRoleNotifier: activeRoleNotifier,
+        studentListNotifier: studentListNotifier,
+        parentApiService: parentApiService,
+      ));
 
       // Skip splash transition
       await tester.pump(const Duration(seconds: 2));

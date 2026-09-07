@@ -4,6 +4,7 @@ import 'package:go_router/go_router.dart';
 import '../../../../app/theme/app_colors.dart';
 import '../../../../core/constants/app_routes.dart';
 import '../../../../core/constants/app_strings.dart';
+import '../../../../core/services/active_role_notifier.dart';
 import '../../../../core/services/auth_service.dart';
 import '../widgets/auth_button.dart';
 import '../widgets/auth_text_field.dart';
@@ -11,10 +12,12 @@ import '../widgets/school_pay_logo.dart';
 
 class LoginScreen extends StatefulWidget {
   final AuthService authService;
+  final ActiveRoleNotifier activeRoleNotifier;
 
   const LoginScreen({
     super.key,
     required this.authService,
+    required this.activeRoleNotifier,
   });
 
   @override
@@ -84,6 +87,11 @@ class _LoginScreenState extends State<LoginScreen> {
     });
 
     if (success) {
+      final user = widget.authService.currentUser;
+      if (user != null) {
+        widget.activeRoleNotifier.value = user.role;
+      }
+      
       ScaffoldMessenger.of(context).showSnackBar(
         const SnackBar(
           content: Text(AppStrings.mockLoginSuccess),

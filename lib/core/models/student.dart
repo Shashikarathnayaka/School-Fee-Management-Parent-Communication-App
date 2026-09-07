@@ -44,4 +44,25 @@ class Student {
       'pickup_status': pickupStatus,
     };
   }
+
+  String get initials {
+    if (name.trim().isEmpty) return '?';
+    final parts = name.trim().split(RegExp(r'\s+'));
+    if (parts.length >= 2) {
+      return '${parts[0][0]}${parts[1][0]}'.toUpperCase();
+    }
+    return parts[0][0].toUpperCase();
+  }
+
+  String get displayGrade {
+    final g = grade ?? '';
+    final s = section ?? '';
+    if (g.isEmpty) return 'N/A';
+    if (g.startsWith('Grade')) {
+      return s.isNotEmpty ? '$g - $s' : g;
+    }
+    return s.isNotEmpty ? 'Grade $g - $s' : 'Grade $g';
+  }
+
+  String get displaySchoolName => schoolName ?? 'N&D School';
 }

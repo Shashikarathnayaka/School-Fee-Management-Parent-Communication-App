@@ -13,6 +13,13 @@ abstract class AppRoutes {
   static const String driverStudents = '/driver-students';
   static const String driverHistory = '/driver-history';
 
+  // Driver Upgrade
+  static const String becomeDriver = '/become-driver';
+
+  // Student Routes
+  static const String addStudent = '/add-student';
+  static const String manageStudents = '/manage-students';
+
   static const String splashName = 'splash';
   static const String loginName = 'login';
   static const String registerName = 'register';
@@ -26,5 +33,12 @@ abstract class AppRoutes {
   static const String driverRouteName = 'driverRoute';
   static const String driverStudentsName = 'driverStudents';
   static const String driverHistoryName = 'driverHistory';
+
+  // Driver Upgrade Route Names
+  static const String becomeDriverName = 'becomeDriver';
+
+  // Student Route Names
+  static const String addStudentName = 'addStudent';
+  static const String manageStudentsName = 'manageStudents';
 }
 

@@ -1,7 +1,7 @@
 import 'package:flutter/material.dart';
 
 import '../../../../app/theme/app_colors.dart';
-import '../../domain/models/student.dart';
+import '../../../../core/models/student.dart';
 
 class StudentCard extends StatelessWidget {
   final Student student;
@@ -58,7 +58,9 @@ class StudentCard extends StatelessWidget {
                   ),
                   child: DropdownButtonHideUnderline(
                     child: DropdownButton<Student>(
-                      value: student,
+                      value: allStudents.any((s) => s.id == student.id)
+                          ? student
+                          : allStudents.first,
                       isDense: true,
                       icon: const Icon(
                         Icons.keyboard_arrow_down_rounded,
@@ -119,7 +121,7 @@ class StudentCard extends StatelessWidget {
                     ),
                     const SizedBox(height: 2),
                     Text(
-                      student.grade,
+                      student.displayGrade,
                       style: theme.textTheme.bodyMedium?.copyWith(
                         color: AppColors.primaryBlue,
                         fontWeight: FontWeight.w600,
@@ -127,7 +129,7 @@ class StudentCard extends StatelessWidget {
                     ),
                     const SizedBox(height: 2),
                     Text(
-                      student.schoolName,
+                      student.displaySchoolName,
                       style: theme.textTheme.bodyMedium?.copyWith(
                         color: AppColors.textSecondary,
                         fontSize: 12,

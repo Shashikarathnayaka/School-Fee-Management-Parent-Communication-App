@@ -1,25 +1,38 @@
+import '../../../core/models/parent_profile.dart';
+import '../../../core/models/student.dart';
 import '../domain/models/fee_summary.dart';
 import '../domain/models/notification_item.dart';
 import '../domain/models/payment_record.dart';
-import '../domain/models/student.dart';
 
 abstract class MockHomeData {
   static const String parentName = 'Shashi';
 
+  /// Mock parent profile — hasDriverProfile defaults to false
+  /// so the become-driver popup shows for parent-only users.
+  static final ParentProfile parentProfile = ParentProfile(
+    id: 'usr_parent_01',
+    name: parentName,
+    email: 'parent@test.com',
+    phone: '0712345678',
+    hasDriverProfile: false,
+  );
+
   static final List<Student> students = [
-    const Student(
+    Student(
       id: 'st_01',
       name: 'Kaveesha Rathnayaka',
-      grade: 'Grade 08 - A',
+      grade: '08',
+      section: 'A',
       schoolName: 'N&D International School',
-      initials: 'AJ',
+      studentCode: 'STU-KAV01',
     ),
-    const Student(
+    Student(
       id: 'st_02',
       name: 'Shashika Rathnayaka',
-      grade: 'Grade 05 - B',
+      grade: '05',
+      section: 'B',
       schoolName: 'N&D International School',
-      initials: 'SJ',
+      studentCode: 'STU-SHA02',
     ),
   ];
 

@@ -34,6 +34,27 @@ class ApiAuthService extends AuthService {
     return false;
   }
 
+  /// Parses a roles set from the API response user object.
+  /// Supports both a `roles` array and a single `role` string for backward compat.
+  Set<UserRole> _parseRoles(Map<String, dynamic> userObj, {UserRole? fallback}) {
+    final rolesJson = userObj['roles'];
+    if (rolesJson is List && rolesJson.isNotEmpty) {
+      final parsed = <UserRole>{};
+      for (final r in rolesJson) {
+        final upper = r.toString().toUpperCase();
+        if (upper == 'DRIVER') parsed.add(UserRole.driver);
+        if (upper == 'PARENT') parsed.add(UserRole.parent);
+      }
+      if (parsed.isNotEmpty) return parsed;
+    }
+    // Fallback to single 'role' string
+    final roleStr = userObj['role'] ?? '';
+    if (roleStr.toString().toUpperCase() == 'DRIVER') {
+      return {UserRole.driver};
+    }
+    return {fallback ?? UserRole.parent};
+  }
+
   @override
   Future<bool> login({
     required String emailOrPhone,
@@ -52,15 +73,12 @@ class ApiAuthService extends AuthService {
         await _apiClient.setToken(response['token']);
 
         final userObj = response['user'] ?? {};
-        final roleStr = userObj['role'] ?? 'PARENT';
 
         _currentUser = AuthUser(
           id: userObj['id'] ?? '',
           name: userObj['name'] ?? '',
           email: userObj['email'] ?? emailOrPhone,
-          role: roleStr.toString().toUpperCase() == 'DRIVER'
-              ? UserRole.driver
-              : UserRole.parent,
+          roles: _parseRoles(userObj),
         );
 
         notifyListeners();
@@ -99,7 +117,7 @@ class ApiAuthService extends AuthService {
           id: userObj['id'] ?? '',
           name: userObj['name'] ?? fullName,
           email: userObj['email'] ?? email,
-          role: UserRole.parent,
+          roles: _parseRoles(userObj, fallback: UserRole.parent),
         );
 
         notifyListeners();
@@ -142,7 +160,7 @@ class ApiAuthService extends AuthService {
           id: userObj['id'] ?? '',
           name: userObj['name'] ?? fullName,
           email: userObj['email'] ?? email,
-          role: UserRole.driver,
+          roles: _parseRoles(userObj, fallback: UserRole.driver),
         );
 
         notifyListeners();
@@ -151,6 +169,41 @@ class ApiAuthService extends AuthService {
       return false;
     } catch (e) {
       debugPrint('Register error: $e');
+      return false;
+    }
+  }
+
+  @override
+  Future<bool> becomeDriver({
+    required String vanNumber,
+    required String licenseNo,
+  }) async {
+    try {
+      final response = await _apiClient.patch(
+        ApiConfig.parentBecomeDriver,
+        body: {
+          'van_number': vanNumber,
+          'license_no': licenseNo,
+        },
+      );
+
+      if (response != null && response['token'] != null) {
+        await _apiClient.setToken(response['token']);
+
+        final userObj = response['user'] ?? {};
+        _currentUser = AuthUser(
+          id: userObj['id'] ?? _currentUser?.id ?? '',
+          name: userObj['name'] ?? _currentUser?.name ?? '',
+          email: userObj['email'] ?? _currentUser?.email ?? '',
+          roles: _parseRoles(userObj, fallback: UserRole.parent),
+        );
+
+        notifyListeners();
+        return true;
+      }
+      return false;
+    } catch (e) {
+      debugPrint('Become driver error: $e');
       return false;
     }
   }

@@ -3,6 +3,7 @@ import 'package:go_router/go_router.dart';
 
 import '../../../../app/theme/app_colors.dart';
 import '../../../../core/constants/app_routes.dart';
+import '../../../../core/services/active_role_notifier.dart';
 import '../../../../core/services/auth_service.dart';
 import '../../../home/presentation/widgets/app_bottom_nav_bar.dart';
 import '../../data/mock_driver_data.dart';
@@ -13,8 +14,13 @@ import '../../../home/domain/models/payment_record.dart';
 
 class DriverStudentsScreen extends StatelessWidget {
   final AuthService authService;
+  final ActiveRoleNotifier activeRoleNotifier;
 
-  const DriverStudentsScreen({super.key, required this.authService});
+  const DriverStudentsScreen({
+    super.key,
+    required this.authService,
+    required this.activeRoleNotifier,
+  });
 
   void _onBottomNavTapped(BuildContext context, int index) {
     switch (index) {
@@ -177,6 +183,7 @@ class DriverStudentsScreen extends StatelessWidget {
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
     final pickups = MockDriverData.pickups;
+    final activeRole = activeRoleNotifier.value;
 
     return Scaffold(
       backgroundColor: AppColors.backgroundLight,
@@ -193,7 +200,7 @@ class DriverStudentsScreen extends StatelessWidget {
       ),
       bottomNavigationBar: AppBottomNavBar(
         currentIndex: 2,
-        userRole: authService.currentUser?.role,
+        userRole: activeRole,
         onTap: (index) => _onBottomNavTapped(context, index),
       ),
       body: SafeArea(

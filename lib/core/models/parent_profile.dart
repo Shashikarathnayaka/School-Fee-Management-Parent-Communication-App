@@ -3,12 +3,14 @@ class ParentProfile {
   final String name;
   final String? email;
   final String? phone;
+  final bool hasDriverProfile;
 
   ParentProfile({
     required this.id,
     required this.name,
     this.email,
     this.phone,
+    this.hasDriverProfile = false,
   });
 
   factory ParentProfile.fromJson(Map<String, dynamic> json) {
@@ -17,6 +19,7 @@ class ParentProfile {
       name: json['name'] ?? '',
       email: json['email'],
       phone: json['phone'],
+      hasDriverProfile: json['has_driver_profile'] ?? false,
     );
   }
 }

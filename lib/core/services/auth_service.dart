@@ -30,6 +30,11 @@ abstract class AuthService extends ChangeNotifier {
     required String licenseNo,
   });
 
+  Future<bool> becomeDriver({
+    required String vanNumber,
+    required String licenseNo,
+  });
+
   Future<void> logout();
 }
 
@@ -72,7 +77,7 @@ class MockAuthService extends AuthService {
         id: 'usr_parent_01',
         name: 'Shashi Karathnayaka',
         email: devParentEmail,
-        role: UserRole.parent,
+        roles: {UserRole.parent},
       );
       notifyListeners();
       return true;
@@ -83,7 +88,7 @@ class MockAuthService extends AuthService {
         id: 'usr_driver_01',
         name: 'Kamal Silva',
         email: devDriverEmail,
-        role: UserRole.driver,
+        roles: {UserRole.driver},
       );
       notifyListeners();
       return true;
@@ -135,10 +140,30 @@ class MockAuthService extends AuthService {
   }
 
   @override
+  Future<bool> becomeDriver({
+    required String vanNumber,
+    required String licenseNo,
+  }) async {
+    // Simulate network delay
+    await Future.delayed(const Duration(milliseconds: 800));
+
+    if (_currentUser != null && vanNumber.isNotEmpty && licenseNo.isNotEmpty) {
+      _currentUser = AuthUser(
+        id: _currentUser!.id,
+        name: _currentUser!.name,
+        email: _currentUser!.email,
+        roles: {..._currentUser!.roles, UserRole.driver},
+      );
+      notifyListeners();
+      return true;
+    }
+    return false;
+  }
+
+  @override
   Future<void> logout() async {
     await Future.delayed(const Duration(milliseconds: 300));
     _currentUser = null;
     notifyListeners();
   }
 }
-

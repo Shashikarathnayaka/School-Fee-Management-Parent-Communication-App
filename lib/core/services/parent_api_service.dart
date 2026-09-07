@@ -6,14 +6,14 @@ import '../network/api_client.dart';
 import '../network/api_config.dart';
 
 class ParentApiService {
-  final ApiClient _apiClient;
+  final ApiClient? _apiClient;
 
-  ParentApiService(this._apiClient);
+  ParentApiService([this._apiClient]);
 
   Future<ParentProfile?> getProfile() async {
-    final response = await _apiClient.get(ApiConfig.parentProfile);
+    final response = await _apiClient?.get(ApiConfig.parentProfile);
     if (response != null) {
-      return ParentProfile.fromJson(response);
+      return ParentProfile.fromJson(response['profile']);
     }
     return null;
   }
@@ -23,17 +23,20 @@ class ParentApiService {
     if (name != null) body['name'] = name;
     if (phone != null) body['phone'] = phone;
 
-    final response = await _apiClient.patch(ApiConfig.parentProfile, body: body);
+    final response =
+        await _apiClient?.patch(ApiConfig.parentProfile, body: body);
     if (response != null) {
-      return ParentProfile.fromJson(response);
+      return ParentProfile.fromJson(response['profile']);
     }
     return null;
   }
 
   Future<List<Student>> getStudents() async {
-    final response = await _apiClient.get(ApiConfig.parentStudents);
-    if (response != null && response is List) {
-      return response.map((e) => Student.fromJson(e)).toList();
+    final response = await _apiClient?.get(ApiConfig.parentStudents);
+    if (response != null && response['students'] is List) {
+      return (response['students'] as List)
+          .map((e) => Student.fromJson(e))
+          .toList();
     }
     return [];
   }
@@ -53,17 +56,18 @@ class ParentApiService {
       if (pickupLocation != null) 'pickup_location': pickupLocation,
     };
 
-    final response = await _apiClient.post(ApiConfig.parentStudents, body: body);
+    final response =
+        await _apiClient?.post(ApiConfig.parentStudents, body: body);
     if (response != null) {
-      return Student.fromJson(response);
+      return Student.fromJson(response['student']);
     }
     return null;
   }
 
   Future<Student?> getStudentDetails(String id) async {
-    final response = await _apiClient.get('${ApiConfig.parentStudents}/$id');
+    final response = await _apiClient?.get('${ApiConfig.parentStudents}/$id');
     if (response != null) {
-      return Student.fromJson(response);
+      return Student.fromJson(response['student']);
     }
     return null;
   }
@@ -73,31 +77,36 @@ class ParentApiService {
     if (date != null) {
       url += '?date=$date';
     }
-    final response = await _apiClient.get(url);
-    return response;
+    final response = await _apiClient?.get(url);
+    if (response != null) {
+      return response['status'];
+    }
+    return null;
   }
 
   Future<List<Fee>> getFees() async {
-    final response = await _apiClient.get(ApiConfig.parentFees);
-    if (response != null && response is List) {
-      return response.map((e) => Fee.fromJson(e)).toList();
+    final response = await _apiClient?.get(ApiConfig.parentFees);
+    if (response != null && response['fees'] is List) {
+      return (response['fees'] as List).map((e) => Fee.fromJson(e)).toList();
     }
     return [];
   }
 
   Future<void> payFee(String feeId) async {
-    await _apiClient.patch('${ApiConfig.parentFees}/$feeId/pay');
+    await _apiClient?.patch('${ApiConfig.parentFees}/$feeId/pay');
   }
 
   Future<List<AppNotification>> getNotifications() async {
-    final response = await _apiClient.get(ApiConfig.parentNotifications);
-    if (response != null && response is List) {
-      return response.map((e) => AppNotification.fromJson(e)).toList();
+    final response = await _apiClient?.get(ApiConfig.parentNotifications);
+    if (response != null && response['notifications'] is List) {
+      return (response['notifications'] as List)
+          .map((e) => AppNotification.fromJson(e))
+          .toList();
     }
     return [];
   }
 
   Future<void> readNotification(String id) async {
-    await _apiClient.patch('${ApiConfig.parentNotifications}/$id/read');
+    await _apiClient?.patch('${ApiConfig.parentNotifications}/$id/read');
   }
 }

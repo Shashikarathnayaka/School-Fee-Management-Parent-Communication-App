@@ -11,5 +11,9 @@ void main() async {
   
   runApp(SmartSchoolPayApp(
     authService: ServiceLocator.instance.authService,
+    activeRoleNotifier: ServiceLocator.instance.activeRoleNotifier,
+    studentListNotifier: ServiceLocator.instance.studentListNotifier,
+    parentApiService: ServiceLocator.instance.parentApiService,
   ));
 }
+

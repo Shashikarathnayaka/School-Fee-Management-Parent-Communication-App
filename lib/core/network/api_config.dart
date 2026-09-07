@@ -11,6 +11,7 @@ class ApiConfig {
 
   // Parent Endpoints
   static const String parentProfile = '$baseUrl/parent/profile';
+  static const String parentBecomeDriver = '$baseUrl/parent/become-driver';
   static const String parentStudents = '$baseUrl/parent/students';
   static const String parentFees = '$baseUrl/parent/fees';
   static const String parentNotifications = '$baseUrl/parent/notifications';

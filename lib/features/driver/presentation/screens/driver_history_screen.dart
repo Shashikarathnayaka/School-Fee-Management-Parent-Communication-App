@@ -3,15 +3,18 @@ import 'package:go_router/go_router.dart';
 
 import '../../../../app/theme/app_colors.dart';
 import '../../../../core/constants/app_routes.dart';
+import '../../../../core/services/active_role_notifier.dart';
 import '../../../../core/services/auth_service.dart';
 import '../../../home/presentation/widgets/app_bottom_nav_bar.dart';
 
 class DriverHistoryScreen extends StatelessWidget {
   final AuthService authService;
+  final ActiveRoleNotifier activeRoleNotifier;
 
   const DriverHistoryScreen({
     super.key,
     required this.authService,
+    required this.activeRoleNotifier,
   });
 
   void _onBottomNavTapped(BuildContext context, int index) {
@@ -36,6 +39,8 @@ class DriverHistoryScreen extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final activeRole = activeRoleNotifier.value;
+
     return Scaffold(
       backgroundColor: AppColors.backgroundLight,
       appBar: AppBar(
@@ -51,7 +56,7 @@ class DriverHistoryScreen extends StatelessWidget {
       ),
       bottomNavigationBar: AppBottomNavBar(
         currentIndex: 1,
-        userRole: authService.currentUser?.role,
+        userRole: activeRole,
         onTap: (index) => _onBottomNavTapped(context, index),
       ),
       body: const SafeArea(

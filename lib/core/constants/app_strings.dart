@@ -83,4 +83,58 @@ abstract class AppStrings {
   static const String forgotPasswordNotice = 'Forgot password functionality will be available in the next release.';
   static const String mockLoginSuccess = 'Login successful! Navigating to home...';
   static const String mockRegistrationSuccess = 'Account created successfully! Please sign in.';
+
+  // Driver Upgrade
+  static const String becomeDriverDialogTitle = 'Become a School Van Driver';
+  static const String becomeDriverDialogContent =
+      'Update your profile to also register as a school van driver and manage student pickups.';
+  static const String becomeDriverNotNow = 'Not Now';
+  static const String becomeDriverUpdate = 'Update';
+  static const String becomeDriverScreenTitle = 'Register as a Driver';
+  static const String becomeDriverSubtitle =
+      'Add your vehicle details to also drive for the school';
+  static const String vanNumberLabel = 'Van Number';
+  static const String vanNumberHint = 'e.g. WP NC-4821';
+  static const String licenseNoLabel = 'License Number';
+  static const String licenseNoHint = 'Enter your driving license number';
+  static const String reqVanNumber = 'Van number is required';
+  static const String reqLicenseNo = 'License number is required';
+  static const String becomeDriverButton = 'Register as Driver';
+  static const String becomeDriverSuccess =
+      'You are now registered as a driver! You can switch modes from your Profile.';
+  static const String becomeDriverError =
+      'Registration failed. Please check details and try again.';
+
+  // Role Switch
+  static const String roleSwitchParent = 'Parent';
+  static const String roleSwitchDriver = 'Driver';
+
+  // Add Student
+  static const String addStudentScreenTitle = 'Add Student';
+  static const String addStudentSubtitle =
+      'Register a child to manage their school fees and van pickup';
+  static const String studentNameLabel = 'Student Name';
+  static const String studentNameHint = "Enter student's full name";
+  static const String reqStudentName = 'Student name is required';
+  static const String gradeLabel = 'Grade / Class';
+  static const String gradeHint = 'e.g. Grade 5-B';
+  static const String sectionLabel = 'Section';
+  static const String sectionHint = 'e.g. Section A';
+  static const String schoolNameLabel = 'School Name';
+  static const String schoolNameHint = 'Enter school name';
+  static const String pickupLocationLabel = 'Pickup Location';
+  static const String pickupLocationHint = 'Enter home address or pickup point';
+  static const String addStudentButton = 'Add Student';
+  static const String addStudentSuccessDialogTitle = 'Student Added!';
+  static const String addStudentCodeNotice =
+      "Share this code with your child's van driver so they can add your child to their route.";
+  static const String copyCodeButton = 'Copy Code';
+  static const String codeCopiedToast = 'Student code copied to clipboard!';
+  static const String addStudentError =
+      'Failed to add student. Please check details and try again.';
+  static const String noStudentsTitle = 'No Students Added Yet';
+  static const String noStudentsSubtitle =
+      'Add your child to track fee payments and van pickup routes.';
+  static const String addFirstStudentButton = 'Add Your First Student';
+  static const String addStudentAction = 'Add Student';
 }

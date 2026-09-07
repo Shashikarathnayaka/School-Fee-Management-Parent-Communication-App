@@ -3,16 +3,20 @@ import 'package:go_router/go_router.dart';
 
 import '../../../../app/theme/app_colors.dart';
 import '../../../../core/constants/app_routes.dart';
+import '../../../../core/constants/app_strings.dart';
 import '../../../../core/models/user_role.dart';
+import '../../../../core/services/active_role_notifier.dart';
 import '../../../../core/services/auth_service.dart';
 import '../../../home/presentation/widgets/app_bottom_nav_bar.dart';
 
 class ProfileScreen extends StatelessWidget {
   final AuthService authService;
+  final ActiveRoleNotifier activeRoleNotifier;
 
   const ProfileScreen({
     super.key,
     required this.authService,
+    required this.activeRoleNotifier,
   });
 
   void _onBottomNavTapped(BuildContext context, int index, bool isDriver) {
@@ -56,10 +60,15 @@ class ProfileScreen extends StatelessWidget {
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
     final user = authService.currentUser;
-    final isDriver = user?.role == UserRole.driver;
-    final userName = user?.name ?? (isDriver ? 'Kamal Silva' : 'Shashi Karathnayaka');
-    final userEmail = user?.email ?? (isDriver ? 'driver@test.com' : 'parent@test.com');
-    final roleLabel = isDriver ? 'School Van Driver' : 'Parent / Guardian';
+    
+    // We use the active role to decide which UI mode we are currently rendering.
+    final activeRole = activeRoleNotifier.value;
+    final isDriverMode = activeRole == UserRole.driver;
+    final hasDualRole = user?.hasDualRole ?? false;
+
+    final userName = user?.name ?? (isDriverMode ? 'Kamal Silva' : 'Shashi Karathnayaka');
+    final userEmail = user?.email ?? (isDriverMode ? 'driver@test.com' : 'parent@test.com');
+    final roleLabel = isDriverMode ? 'School Van Driver' : 'Parent / Guardian';
 
     return Scaffold(
       backgroundColor: AppColors.backgroundLight,
@@ -67,7 +76,7 @@ class ProfileScreen extends StatelessWidget {
         backgroundColor: AppColors.primaryNavy,
         elevation: 0,
         title: Text(
-          isDriver ? 'Driver Profile' : 'Parent Profile',
+          isDriverMode ? 'Driver Profile' : 'Parent Profile',
           style: const TextStyle(
             color: AppColors.surfaceWhite,
             fontWeight: FontWeight.bold,
@@ -75,9 +84,9 @@ class ProfileScreen extends StatelessWidget {
         ),
       ),
       bottomNavigationBar: AppBottomNavBar(
-        currentIndex: isDriver ? 4 : 3,
-        userRole: user?.role,
-        onTap: (index) => _onBottomNavTapped(context, index, isDriver),
+        currentIndex: isDriverMode ? 4 : 3,
+        userRole: activeRole,
+        onTap: (index) => _onBottomNavTapped(context, index, isDriverMode),
       ),
       body: SafeArea(
         child: SingleChildScrollView(
@@ -85,10 +94,50 @@ class ProfileScreen extends StatelessWidget {
           child: Column(
             children: [
               const SizedBox(height: 12),
+              
+              if (hasDualRole) ...[
+                // Segmented control for role switching
+                SegmentedButton<UserRole>(
+                  segments: const [
+                    ButtonSegment<UserRole>(
+                      value: UserRole.parent,
+                      label: Text(AppStrings.roleSwitchParent),
+                      icon: Icon(Icons.family_restroom_rounded),
+                    ),
+                    ButtonSegment<UserRole>(
+                      value: UserRole.driver,
+                      label: Text(AppStrings.roleSwitchDriver),
+                      icon: Icon(Icons.airport_shuttle_rounded),
+                    ),
+                  ],
+                  selected: {activeRole},
+                  onSelectionChanged: (Set<UserRole> newSelection) {
+                    final selected = newSelection.first;
+                    if (selected != activeRole) {
+                      activeRoleNotifier.value = selected;
+                      context.go(AppRoutes.home);
+                    }
+                  },
+                  style: ButtonStyle(
+                    backgroundColor: WidgetStateProperty.resolveWith<Color>(
+                      (Set<WidgetState> states) {
+                        if (states.contains(WidgetState.selected)) {
+                          return activeRole == UserRole.driver
+                              ? AppColors.accentTeal.withValues(alpha: 0.2)
+                              : AppColors.primaryBlueLight;
+                        }
+                        return AppColors.surfaceWhite;
+                      },
+                    ),
+                  ),
+                ),
+                const SizedBox(height: 24),
+              ],
+
               // User Avatar & Name
               CircleAvatar(
                 radius: 40,
-                backgroundColor: isDriver ? AppColors.accentTeal : AppColors.primaryNavy,
+                backgroundColor: isDriverMode ? AppColors.accentTeal : AppColors.primaryNavy,
                 child: Text(
                   userName.substring(0, 1).toUpperCase(),
                   style: const TextStyle(
@@ -118,13 +167,13 @@ class ProfileScreen extends StatelessWidget {
               Container(
                 padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 4),
                 decoration: BoxDecoration(
-                  color: isDriver ? AppColors.accentTeal.withValues(alpha: 0.1) : AppColors.primaryBlueLight,
+                  color: isDriverMode ? AppColors.accentTeal.withValues(alpha: 0.1) : AppColors.primaryBlueLight,
                   borderRadius: BorderRadius.circular(20),
                 ),
                 child: Text(
                   roleLabel,
                   style: TextStyle(
-                    color: isDriver ? AppColors.accentTeal : AppColors.primaryBlue,
+                    color: isDriverMode ? AppColors.accentTeal : AppColors.primaryBlue,
                     fontWeight: FontWeight.bold,
                     fontSize: 12,
                   ),
@@ -154,19 +203,15 @@ class ProfileScreen extends StatelessWidget {
                       },
                     ),
                     const Divider(height: 1, color: AppColors.cardBorder),
-                    if (!isDriver) ...[
+                    if (!isDriverMode) ...[
                       ListTile(
                         leading: const Icon(Icons.child_care_rounded,
                             color: AppColors.primaryBlue),
                         title: const Text('Managed Students'),
-                        subtitle: const Text('2 registered children'),
+                        subtitle: const Text('2 registered children'), // TODO: wire up dynamic student count
                         trailing: const Icon(Icons.chevron_right_rounded,
                             color: AppColors.textMuted),
-                        onTap: () {
-                          ScaffoldMessenger.of(context).showSnackBar(
-                            const SnackBar(content: Text('Student manager coming soon')),
-                          );
-                        },
+                        onTap: () => context.go(AppRoutes.manageStudents),
                       ),
                       const Divider(height: 1, color: AppColors.cardBorder),
                     ] else ...[
@@ -245,4 +290,3 @@ class ProfileScreen extends StatelessWidget {
     );
   }
 }
-
