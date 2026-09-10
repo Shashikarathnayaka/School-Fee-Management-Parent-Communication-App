@@ -14,6 +14,7 @@ void main() async {
     activeRoleNotifier: ServiceLocator.instance.activeRoleNotifier,
     studentListNotifier: ServiceLocator.instance.studentListNotifier,
     parentApiService: ServiceLocator.instance.parentApiService,
+    driverApiService: ServiceLocator.instance.driverApiService,
   ));
 }
 

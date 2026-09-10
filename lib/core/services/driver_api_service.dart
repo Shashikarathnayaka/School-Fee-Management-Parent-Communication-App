@@ -68,10 +68,17 @@ class DriverApiService {
     return [];
   }
 
-  Future<void> addStudentToRoute(String routeId, String studentCode) async {
+  Future<void> addStudentToRoute(
+    String routeId,
+    String studentCode,
+    double monthlyFee,
+  ) async {
     await _apiClient.post(
       '${ApiConfig.driverRoutes}/$routeId/students',
-      body: {'student_code': studentCode},
+      body: {
+        'student_code': studentCode,
+        'monthly_fee': monthlyFee,
+      },
     );
   }
 

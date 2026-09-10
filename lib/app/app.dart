@@ -3,6 +3,7 @@ import 'package:flutter/material.dart';
 import '../core/constants/app_strings.dart';
 import '../core/services/active_role_notifier.dart';
 import '../core/services/auth_service.dart';
+import '../core/services/driver_api_service.dart';
 import '../core/services/parent_api_service.dart';
 import '../core/services/student_list_notifier.dart';
 import 'router/app_router.dart';
@@ -13,6 +14,7 @@ class SmartSchoolPayApp extends StatefulWidget {
   final ActiveRoleNotifier activeRoleNotifier;
   final StudentListNotifier studentListNotifier;
   final ParentApiService parentApiService;
+  final DriverApiService? driverApiService;
 
   const SmartSchoolPayApp({
     super.key,
@@ -20,6 +22,7 @@ class SmartSchoolPayApp extends StatefulWidget {
     required this.activeRoleNotifier,
     required this.studentListNotifier,
     required this.parentApiService,
+    this.driverApiService,
   });
 
   @override
@@ -32,6 +35,7 @@ class _SmartSchoolPayAppState extends State<SmartSchoolPayApp> {
     widget.activeRoleNotifier,
     widget.studentListNotifier,
     widget.parentApiService,
+    driverApiService: widget.driverApiService,
   );
 
   @override

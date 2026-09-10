@@ -12,6 +12,9 @@ import '../../features/auth/presentation/screens/splash_screen.dart';
 import '../../features/driver/presentation/screens/driver_history_screen.dart';
 import '../../features/driver/presentation/screens/driver_route_screen.dart';
 import '../../features/driver/presentation/screens/driver_students_screen.dart';
+import '../../core/models/driver_route.dart';
+import '../../core/services/driver_api_service.dart';
+import '../../features/driver/presentation/screens/driver_register_student_screen.dart';
 import '../../features/home/presentation/screens/add_student_screen.dart';
 import '../../features/home/presentation/screens/home_screen.dart';
 import '../../features/notifications/presentation/screens/notifications_screen.dart';
@@ -25,8 +28,9 @@ abstract class AppRouter {
     AuthService authService,
     ActiveRoleNotifier activeRoleNotifier,
     StudentListNotifier studentListNotifier,
-    ParentApiService parentApiService,
-  ) {
+    ParentApiService parentApiService, {
+    DriverApiService? driverApiService,
+  }) {
     return GoRouter(
       initialLocation: AppRoutes.splash,
       refreshListenable: authService,
@@ -126,7 +130,21 @@ abstract class AppRouter {
           builder: (context, state) => DriverStudentsScreen(
             authService: authService,
             activeRoleNotifier: activeRoleNotifier,
+            driverApiService: driverApiService,
           ),
+        ),
+        GoRoute(
+          path: AppRoutes.driverRegisterStudent,
+          name: AppRoutes.driverRegisterStudentName,
+          builder: (context, state) {
+            final extra = state.extra as Map<String, dynamic>?;
+            return DriverRegisterStudentScreen(
+              authService: authService,
+              driverApiService: driverApiService,
+              initialRouteId: extra?['routeId'] as String?,
+              initialRoutes: extra?['routes'] as List<DriverRoute>?,
+            );
+          },
         ),
         GoRoute(
           path: AppRoutes.driverHistory,

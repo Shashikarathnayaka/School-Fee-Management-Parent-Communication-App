@@ -55,9 +55,21 @@ class ApiClient {
       try {
         if (response.body.isNotEmpty) {
           final body = jsonDecode(response.body);
-          if (body['error'] != null) {
-            errorMessage = body['error']['message'] ?? errorMessage;
-            errorCode = body['error']['code'];
+          if (body is Map) {
+            if (body['error'] != null) {
+              if (body['error'] is Map) {
+                errorMessage = body['error']['message'] ?? errorMessage;
+                errorCode = body['error']['code'];
+              } else if (body['error'] is String) {
+                errorMessage = body['error'];
+              }
+            }
+            if (body['code'] != null && body['code'] is String) {
+              errorCode = body['code'];
+            }
+            if (body['message'] != null && body['message'] is String) {
+              errorMessage = body['message'];
+            }
           }
         }
       } catch (_) {

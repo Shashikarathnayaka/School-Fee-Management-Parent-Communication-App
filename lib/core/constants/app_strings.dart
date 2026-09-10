@@ -137,4 +137,26 @@ abstract class AppStrings {
       'Add your child to track fee payments and van pickup routes.';
   static const String addFirstStudentButton = 'Add Your First Student';
   static const String addStudentAction = 'Add Student';
+
+  // Driver Register Student
+  static const String registerStudentTitle = 'Register Student';
+  static const String registerStudentSubtitle =
+      'Assign a student to your route with their monthly transport fee.';
+  static const String studentCodeLabel = 'Student Code';
+  static const String studentCodeHint = 'e.g. STU-12345';
+  static const String reqStudentCode = 'Student code is required';
+  static const String monthlyFeeLabel = 'Monthly Payment (Transport Fee)';
+  static const String monthlyFeeHint = 'e.g. 5000.00';
+  static const String reqMonthlyFee = 'Monthly fee is required';
+  static const String invalidMonthlyFee = 'Enter a valid positive fee amount';
+  static const String selectRouteLabel = 'Assign to Route';
+  static const String registerStudentButton = 'Register Student';
+  static const String registerStudentSuccessTitle = 'Student Registered!';
+  static const String studentNotFound = 'No student found with this code.';
+  static const String studentConflict =
+      'This student is already registered on an active route.';
+  static const String registerStudentGenericError =
+      "Couldn't register student, please try again.";
+  static const String noDriverRoutesError =
+      'No active routes found for today. Please create or start a route first.';
 }
