@@ -376,5 +376,71 @@ void main() {
 
       expect(find.text(AppStrings.studentConflict), findsOneWidget);
     });
+
+    testWidgets('DriverRegisterStudentScreen accepts SCHEDULED and ACTIVE routes, excluding COMPLETED',
+        (WidgetTester tester) async {
+      final scheduledRoute = DriverRoute(
+        id: 'route_sched',
+        name: 'Scheduled Route',
+        status: 'SCHEDULED',
+      );
+      final activeRoute = DriverRoute(
+        id: 'route_act',
+        name: 'Active Route',
+        status: 'ACTIVE',
+      );
+      final completedRoute = DriverRoute(
+        id: 'route_comp',
+        name: 'Completed Route',
+        status: 'COMPLETED',
+      );
+
+      final mockApi = MockDriverApiService(
+        mockRoutes: [scheduledRoute, activeRoute, completedRoute],
+      );
+
+      await tester.pumpWidget(
+        MaterialApp(
+          home: DriverRegisterStudentScreen(
+            authService: mockAuthService,
+            driverApiService: mockApi,
+          ),
+        ),
+      );
+
+      await tester.pumpAndSettle();
+
+      // Scheduled and Active should be selectable, not showing the zero-routes error
+      expect(find.text(AppStrings.noDriverRoutesError), findsNothing);
+      expect(find.text(AppStrings.selectRouteLabel), findsOneWidget);
+      expect(find.text('Scheduled Route'), findsOneWidget);
+    });
+
+    testWidgets('DriverRegisterStudentScreen displays empty state when all routes are COMPLETED',
+        (WidgetTester tester) async {
+      final completedRoute = DriverRoute(
+        id: 'route_comp_only',
+        name: 'Completed Route Only',
+        status: 'COMPLETED',
+      );
+
+      final mockApi = MockDriverApiService(
+        mockRoutes: [completedRoute],
+      );
+
+      await tester.pumpWidget(
+        MaterialApp(
+          home: DriverRegisterStudentScreen(
+            authService: mockAuthService,
+            driverApiService: mockApi,
+          ),
+        ),
+      );
+
+      await tester.pumpAndSettle();
+
+      // Since the only route is COMPLETED, no selectable routes exist
+      expect(find.text(AppStrings.noDriverRoutesError), findsOneWidget);
+    });
   });
 }

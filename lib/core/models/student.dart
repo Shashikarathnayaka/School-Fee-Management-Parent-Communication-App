@@ -20,15 +20,30 @@ class Student {
   });
 
   factory Student.fromJson(Map<String, dynamic> json) {
+    String? parsedPickupStatus;
+    final rawStatus = json['pickup_status'];
+    if (rawStatus is String) {
+      parsedPickupStatus = rawStatus;
+    } else if (rawStatus is List && rawStatus.isNotEmpty) {
+      final first = rawStatus.first;
+      if (first is Map && first['status'] != null) {
+        parsedPickupStatus = first['status'].toString();
+      } else if (first is String) {
+        parsedPickupStatus = first;
+      }
+    } else if (rawStatus is Map && rawStatus['status'] != null) {
+      parsedPickupStatus = rawStatus['status'].toString();
+    }
+
     return Student(
-      id: json['id'] ?? json['_id'] ?? '',
-      name: json['name'] ?? '',
-      studentCode: json['student_code'],
-      grade: json['grade'],
-      section: json['section'],
-      schoolName: json['school_name'],
-      pickupLocation: json['pickup_location'],
-      pickupStatus: json['pickup_status'],
+      id: json['id']?.toString() ?? json['_id']?.toString() ?? '',
+      name: json['name']?.toString() ?? '',
+      studentCode: json['student_code']?.toString(),
+      grade: json['grade']?.toString(),
+      section: json['section']?.toString(),
+      schoolName: json['school_name']?.toString(),
+      pickupLocation: json['pickup_location']?.toString(),
+      pickupStatus: parsedPickupStatus,
     );
   }
 

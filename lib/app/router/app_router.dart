@@ -49,6 +49,10 @@ abstract class AppRouter {
         if (isAuthenticated &&
             (state.matchedLocation == AppRoutes.login ||
                 state.matchedLocation == AppRoutes.splash)) {
+          final user = authService.currentUser;
+          if (user != null) {
+            activeRoleNotifier.value = user.role;
+          }
           return AppRoutes.home;
         }
 
@@ -58,7 +62,10 @@ abstract class AppRouter {
         GoRoute(
           path: AppRoutes.splash,
           name: AppRoutes.splashName,
-          builder: (context, state) => SplashScreen(authService: authService),
+          builder: (context, state) => SplashScreen(
+            authService: authService,
+            activeRoleNotifier: activeRoleNotifier,
+          ),
         ),
         GoRoute(
           path: AppRoutes.login,
@@ -81,6 +88,7 @@ abstract class AppRouter {
             authService: authService,
             activeRoleNotifier: activeRoleNotifier,
             parentApiService: parentApiService,
+            driverApiService: driverApiService,
             studentListNotifier: studentListNotifier,
           ),
         ),
@@ -122,6 +130,7 @@ abstract class AppRouter {
           builder: (context, state) => DriverRouteScreen(
             authService: authService,
             activeRoleNotifier: activeRoleNotifier,
+            driverApiService: driverApiService,
           ),
         ),
         GoRoute(

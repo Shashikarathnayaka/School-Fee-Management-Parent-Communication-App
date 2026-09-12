@@ -1,19 +1,8 @@
-import '../domain/models/driver_route.dart';
 import '../domain/models/driver_summary.dart';
 import '../domain/models/pickup_record.dart';
 
 abstract class MockDriverData {
   static const String driverName = 'Kamal Silva';
-
-  static const DriverRoute currentRoute = DriverRoute(
-    id: 'route_01',
-    routeName: 'Morning School Route',
-    pathDescription: 'School → Student Pickup → School',
-    startTime: '07:00 AM',
-    endTime: '08:30 AM',
-    studentCount: 12,
-    status: 'Scheduled',
-  );
 
   static const List<PickupRecord> pickups = [
     PickupRecord(

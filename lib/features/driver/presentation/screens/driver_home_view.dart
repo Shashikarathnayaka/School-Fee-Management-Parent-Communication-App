@@ -4,8 +4,11 @@ import 'package:go_router/go_router.dart';
 import '../../../../app/theme/app_colors.dart';
 import '../../../../core/constants/app_routes.dart';
 import '../../../../core/constants/app_strings.dart';
+import '../../../../core/models/driver_route.dart';
 import '../../../../core/models/user_role.dart';
 import '../../../../core/services/auth_service.dart';
+import '../../../../core/services/driver_api_service.dart';
+import '../../../../core/services/service_locator.dart';
 import '../../../home/presentation/widgets/app_bottom_nav_bar.dart';
 import '../../../home/presentation/widgets/quick_actions_grid.dart';
 import '../../../home/presentation/widgets/section_header.dart';
@@ -14,10 +17,12 @@ import '../../domain/models/pickup_record.dart';
 
 class DriverHomeView extends StatefulWidget {
   final AuthService authService;
+  final DriverApiService? driverApiService;
 
   const DriverHomeView({
     super.key,
     required this.authService,
+    this.driverApiService,
   });
 
   @override
@@ -25,7 +30,34 @@ class DriverHomeView extends StatefulWidget {
 }
 
 class _DriverHomeViewState extends State<DriverHomeView> {
+  late final DriverApiService _driverApiService = widget.driverApiService ??
+      ServiceLocator.instance.driverApiService;
+
   bool _isOnDuty = true;
+  List<DriverRoute> _todayRoutes = [];
+  bool _isLoadingRoutes = true;
+
+  @override
+  void initState() {
+    super.initState();
+    _loadTodayRoutes();
+  }
+
+  Future<void> _loadTodayRoutes() async {
+    try {
+      final routes = await _driverApiService.getTodayRoutes();
+      if (!mounted) return;
+      setState(() {
+        _todayRoutes = routes;
+        _isLoadingRoutes = false;
+      });
+    } catch (_) {
+      if (!mounted) return;
+      setState(() {
+        _isLoadingRoutes = false;
+      });
+    }
+  }
 
   void _onBottomNavTapped(int index) {
     switch (index) {
@@ -47,13 +79,10 @@ class _DriverHomeViewState extends State<DriverHomeView> {
     }
   }
 
-
-
   @override
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
     final driverName = widget.authService.currentUser?.name ?? MockDriverData.driverName;
-    final route = MockDriverData.currentRoute;
     final pickups = MockDriverData.pickups;
     final summary = MockDriverData.todaySummary;
     final announcements = MockDriverData.announcements;
@@ -198,94 +227,7 @@ class _DriverHomeViewState extends State<DriverHomeView> {
               const SizedBox(height: 20),
 
 
-              Container(
-                padding: const EdgeInsets.all(16),
-                decoration: BoxDecoration(
-                  color: AppColors.surfaceWhite,
-                  borderRadius: BorderRadius.circular(16),
-                  border: Border.all(color: AppColors.cardBorder),
-                ),
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    Row(
-                      mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                      children: [
-                        Text(
-                          "Today's Route",
-                          style: theme.textTheme.titleMedium?.copyWith(
-                            fontWeight: FontWeight.bold,
-                            color: AppColors.primaryNavy,
-                          ),
-                        ),
-                        Container(
-                          padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
-                          decoration: BoxDecoration(
-                            color: AppColors.primaryBlueLight,
-                            borderRadius: BorderRadius.circular(20),
-                          ),
-                          child: Text(
-                            route.status,
-                            style: const TextStyle(
-                              color: AppColors.primaryBlue,
-                              fontWeight: FontWeight.bold,
-                              fontSize: 12,
-                            ),
-                          ),
-                        ),
-                      ],
-                    ),
-                    const SizedBox(height: 12),
-                    Text(
-                      route.routeName,
-                      style: const TextStyle(
-                        fontSize: 16,
-                        fontWeight: FontWeight.w600,
-                        color: AppColors.textPrimary,
-                      ),
-                    ),
-                    const SizedBox(height: 4),
-                    Text(
-                      'Route: ${route.pathDescription}',
-                      style: const TextStyle(
-                        fontSize: 13,
-                        color: AppColors.textSecondary,
-                      ),
-                    ),
-                    const SizedBox(height: 12),
-                    Row(
-                      children: [
-                        const Icon(Icons.access_time_rounded, size: 16, color: AppColors.textSecondary),
-                        const SizedBox(width: 4),
-                        Text(
-                          route.startTime,
-                          style: const TextStyle(fontSize: 13, color: AppColors.textSecondary),
-                        ),
-                        const SizedBox(width: 16),
-                        const Icon(Icons.people_outline_rounded, size: 16, color: AppColors.textSecondary),
-                        const SizedBox(width: 4),
-                        Expanded(
-                          child: Text(
-                            '${route.studentCount} Students',
-                            style: const TextStyle(fontSize: 13, color: AppColors.textSecondary),
-                          ),
-                        ),
-                        GestureDetector(
-                          onTap: () => context.go(AppRoutes.driverRoute),
-                          child: const Text(
-                            'View Route',
-                            style: TextStyle(
-                              color: AppColors.primaryBlue,
-                              fontWeight: FontWeight.bold,
-                              fontSize: 13,
-                            ),
-                          ),
-                        ),
-                      ],
-                    ),
-                  ],
-                ),
-              ),
+              _buildTodayRouteCard(theme),
               const SizedBox(height: 24),
 
 
@@ -499,6 +441,208 @@ class _DriverHomeViewState extends State<DriverHomeView> {
           ),
         ),
       ],
+    );
+  }
+
+  Widget _buildTodayRouteCard(ThemeData theme) {
+    if (_isLoadingRoutes) {
+      return Container(
+        padding: const EdgeInsets.all(24),
+        decoration: BoxDecoration(
+          color: AppColors.surfaceWhite,
+          borderRadius: BorderRadius.circular(16),
+          border: Border.all(color: AppColors.cardBorder),
+        ),
+        child: const Center(
+          child: SizedBox(
+            width: 24,
+            height: 24,
+            child: CircularProgressIndicator(
+              strokeWidth: 2.5,
+              color: AppColors.primaryBlue,
+            ),
+          ),
+        ),
+      );
+    }
+
+    if (_todayRoutes.isEmpty) {
+      return Container(
+        padding: const EdgeInsets.all(16),
+        decoration: BoxDecoration(
+          color: AppColors.surfaceWhite,
+          borderRadius: BorderRadius.circular(16),
+          border: Border.all(color: AppColors.cardBorder),
+        ),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Row(
+              mainAxisAlignment: MainAxisAlignment.spaceBetween,
+              children: [
+                Text(
+                  "Today's Route",
+                  style: theme.textTheme.titleMedium?.copyWith(
+                    fontWeight: FontWeight.bold,
+                    color: AppColors.primaryNavy,
+                  ),
+                ),
+                GestureDetector(
+                  onTap: () => context.go(AppRoutes.driverRoute),
+                  child: const Text(
+                    'Create Route',
+                    style: TextStyle(
+                      color: AppColors.primaryBlue,
+                      fontWeight: FontWeight.bold,
+                      fontSize: 13,
+                    ),
+                  ),
+                ),
+              ],
+            ),
+            const SizedBox(height: 12),
+            const Row(
+              children: [
+                Icon(Icons.route_outlined, size: 20, color: AppColors.textSecondary),
+                SizedBox(width: 8),
+                Expanded(
+                  child: Text(
+                    'No routes scheduled for today.',
+                    style: TextStyle(
+                      fontSize: 13,
+                      color: AppColors.textSecondary,
+                    ),
+                  ),
+                ),
+              ],
+            ),
+          ],
+        ),
+      );
+    }
+
+    final route = _todayRoutes.first;
+    final startTime = route.startTime;
+    final endTime = route.endTime;
+    String timeDisplay;
+    if (startTime != null && endTime != null) {
+      timeDisplay = '$startTime - $endTime';
+    } else if (startTime != null) {
+      timeDisplay = 'Starts $startTime';
+    } else if (endTime != null) {
+      timeDisplay = 'Ends $endTime';
+    } else {
+      timeDisplay = 'Time not set';
+    }
+    final studentCount = route.students?.length ?? 0;
+
+    return Container(
+      padding: const EdgeInsets.all(16),
+      decoration: BoxDecoration(
+        color: AppColors.surfaceWhite,
+        borderRadius: BorderRadius.circular(16),
+        border: Border.all(color: AppColors.cardBorder),
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Row(
+            mainAxisAlignment: MainAxisAlignment.spaceBetween,
+            children: [
+              Text(
+                "Today's Route",
+                style: theme.textTheme.titleMedium?.copyWith(
+                  fontWeight: FontWeight.bold,
+                  color: AppColors.primaryNavy,
+                ),
+              ),
+              Container(
+                padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
+                decoration: BoxDecoration(
+                  color: AppColors.primaryBlueLight,
+                  borderRadius: BorderRadius.circular(20),
+                ),
+                child: Text(
+                  route.status ?? 'SCHEDULED',
+                  style: const TextStyle(
+                    color: AppColors.primaryBlue,
+                    fontWeight: FontWeight.bold,
+                    fontSize: 12,
+                  ),
+                ),
+              ),
+            ],
+          ),
+          const SizedBox(height: 12),
+          Text(
+            route.name,
+            style: const TextStyle(
+              fontSize: 16,
+              fontWeight: FontWeight.w600,
+              color: AppColors.textPrimary,
+            ),
+          ),
+          const SizedBox(height: 12),
+          Row(
+            children: [
+              const Icon(Icons.access_time_rounded, size: 16, color: AppColors.textSecondary),
+              const SizedBox(width: 4),
+              Text(
+                timeDisplay,
+                style: const TextStyle(fontSize: 13, color: AppColors.textSecondary),
+              ),
+              const SizedBox(width: 16),
+              const Icon(Icons.people_outline_rounded, size: 16, color: AppColors.textSecondary),
+              const SizedBox(width: 4),
+              Expanded(
+                child: Text(
+                  '$studentCount ${studentCount == 1 ? 'Student' : 'Students'}',
+                  style: const TextStyle(fontSize: 13, color: AppColors.textSecondary),
+                ),
+              ),
+              GestureDetector(
+                onTap: () => context.go(AppRoutes.driverRoute),
+                child: const Text(
+                  'View Route',
+                  style: TextStyle(
+                    color: AppColors.primaryBlue,
+                    fontWeight: FontWeight.bold,
+                    fontSize: 13,
+                  ),
+                ),
+              ),
+            ],
+          ),
+          if (_todayRoutes.length > 1) ...[
+            const SizedBox(height: 12),
+            GestureDetector(
+              onTap: () => context.go(AppRoutes.driverRoute),
+              child: Container(
+                padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
+                decoration: BoxDecoration(
+                  color: AppColors.primaryBlueLight,
+                  borderRadius: BorderRadius.circular(8),
+                ),
+                child: Row(
+                  mainAxisSize: MainAxisSize.min,
+                  children: [
+                    const Icon(Icons.alt_route_rounded, size: 14, color: AppColors.primaryBlue),
+                    const SizedBox(width: 6),
+                    Text(
+                      '+${_todayRoutes.length - 1} more ${_todayRoutes.length - 1 == 1 ? 'route' : 'routes'} today • View all',
+                      style: const TextStyle(
+                        fontSize: 12,
+                        fontWeight: FontWeight.bold,
+                        color: AppColors.primaryBlue,
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+            ),
+          ],
+        ],
+      ),
     );
   }
 }

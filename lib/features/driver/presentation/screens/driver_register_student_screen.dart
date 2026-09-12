@@ -46,11 +46,20 @@ class _DriverRegisterStudentScreenState
   bool _isLoadingRoutes = false;
   bool _isSubmitting = false;
 
+  /// Filters routes to those that can have students registered onto them.
+  /// Any route that is not COMPLETED (e.g. SCHEDULED, ACTIVE, or unspecified) is valid.
+  static List<DriverRoute> filterSelectableRoutes(List<DriverRoute> routes) {
+    return routes.where((r) {
+      final status = r.status?.toUpperCase();
+      return status != 'COMPLETED';
+    }).toList();
+  }
+
   @override
   void initState() {
     super.initState();
     if (widget.initialRoutes != null && widget.initialRoutes!.isNotEmpty) {
-      _routes = List.from(widget.initialRoutes!);
+      _routes = filterSelectableRoutes(widget.initialRoutes!);
       _initSelectedRoute();
     } else {
       _fetchRoutes();
@@ -58,7 +67,10 @@ class _DriverRegisterStudentScreenState
   }
 
   void _initSelectedRoute() {
-    if (_routes.isEmpty) return;
+    if (_routes.isEmpty) {
+      _selectedRouteId = null;
+      return;
+    }
     if (widget.initialRouteId != null &&
         _routes.any((r) => r.id == widget.initialRouteId)) {
       _selectedRouteId = widget.initialRouteId;
@@ -76,7 +88,7 @@ class _DriverRegisterStudentScreenState
       final routes = await _apiService.getTodayRoutes();
       if (!mounted) return;
       setState(() {
-        _routes = routes;
+        _routes = filterSelectableRoutes(routes);
         _initSelectedRoute();
         _isLoadingRoutes = false;
       });

@@ -23,11 +23,14 @@ class ServiceLocator {
   Future<void> init() async {
     prefs = await SharedPreferences.getInstance();
     apiClient = ApiClient(prefs);
-    authService = ApiAuthService(apiClient);
     parentApiService = ParentApiService(apiClient);
     driverApiService = DriverApiService(apiClient);
     activeRoleNotifier = ActiveRoleNotifier();
     studentListNotifier = StudentListNotifier(parentApiService);
+    authService = ApiAuthService(
+      apiClient,
+      studentListNotifier: studentListNotifier,
+    );
   }
 
   static ServiceLocator get instance => _instance;

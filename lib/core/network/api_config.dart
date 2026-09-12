@@ -3,7 +3,7 @@ class ApiConfig {
   // Use localhost or 127.0.0.1 for iOS Simulator
   // Use your computer's local IP address for physical devices
   // static const String baseUrl = 'http://10.0.2.2:3000';
-  static const String baseUrl = 'https://school-fee-management-tau.vercel.app/';
+  static const String baseUrl = 'https://school-fee-management-tau.vercel.app';
 
   // Auth Endpoints
   static const String login = '$baseUrl/auth/login';

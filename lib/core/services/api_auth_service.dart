@@ -1,15 +1,19 @@
+import 'dart:convert';
 import 'package:flutter/foundation.dart';
 import '../models/auth_user.dart';
 import '../models/user_role.dart';
 import '../network/api_client.dart';
 import '../network/api_config.dart';
 import 'auth_service.dart';
+import 'student_list_notifier.dart';
 
 class ApiAuthService extends AuthService {
   final ApiClient _apiClient;
+  final StudentListNotifier? _studentListNotifier;
   AuthUser? _currentUser;
 
-  ApiAuthService(this._apiClient);
+  ApiAuthService(this._apiClient, {StudentListNotifier? studentListNotifier})
+      : _studentListNotifier = studentListNotifier;
 
   @override
   bool get isAuthenticated => _currentUser != null;
@@ -19,19 +23,49 @@ class ApiAuthService extends AuthService {
 
   @override
   Future<bool> checkAuthStatus() async {
-    // Basic check: do we have a token?
     final token = _apiClient.token;
-    if (token != null && token.isNotEmpty) {
-      // Ideally, we would hit a /me endpoint here to get the current user details.
-      // But since the API docs don't specify a /me endpoint that returns the unified AuthUser,
-      // we might need to rely on the stored state or fetch the profile based on the role.
-      // For now, if we don't have _currentUser but have a token, we might not be fully "logged in"
-      // in the app state unless we persisted the user object too.
-      // If we just restarted the app, we need to restore _currentUser from local storage.
-      // (This is a simplified implementation. In a real app, you'd persist user data or fetch it here).
-      return _currentUser != null;
+    if (token == null || token.isEmpty) {
+      return false;
     }
+
+    if (_currentUser != null) {
+      return true;
+    }
+
+    // Token exists but _currentUser is null: restore from persisted user data
+    final userDataJson = _apiClient.getUserData();
+    if (userDataJson != null && userDataJson.isNotEmpty) {
+      try {
+        final dynamic decoded = jsonDecode(userDataJson);
+        if (decoded is Map<String, dynamic>) {
+          _currentUser = AuthUser.fromJson(decoded);
+          notifyListeners();
+          return true;
+        } else if (decoded is Map) {
+          _currentUser = AuthUser.fromJson(Map<String, dynamic>.from(decoded));
+          notifyListeners();
+          return true;
+        }
+      } catch (e) {
+        debugPrint('Failed to restore user data from local storage: $e');
+      }
+    }
+
+    // Token exists but no valid persisted user data can be restored -> clear orphaned token & data
+    await _apiClient.clearToken();
+    await _apiClient.clearUserData();
+    _currentUser = null;
     return false;
+  }
+
+  Future<void> _setCurrentUserAndPersist(AuthUser user) async {
+    _currentUser = user;
+    try {
+      await _apiClient.setUserData(jsonEncode(user.toJson()));
+    } catch (e) {
+      debugPrint('Failed to persist user data: $e');
+    }
+    notifyListeners();
   }
 
   /// Parses a roles set from the API response user object.
@@ -74,14 +108,15 @@ class ApiAuthService extends AuthService {
 
         final userObj = response['user'] ?? {};
 
-        _currentUser = AuthUser(
-          id: userObj['id'] ?? '',
-          name: userObj['name'] ?? '',
-          email: userObj['email'] ?? emailOrPhone,
-          roles: _parseRoles(userObj),
+        _studentListNotifier?.reset();
+        await _setCurrentUserAndPersist(
+          AuthUser(
+            id: userObj['id'] ?? '',
+            name: userObj['name'] ?? '',
+            email: userObj['email'] ?? emailOrPhone,
+            roles: _parseRoles(userObj),
+          ),
         );
-
-        notifyListeners();
         return true;
       }
       return false;
@@ -113,14 +148,15 @@ class ApiAuthService extends AuthService {
         await _apiClient.setToken(response['token']);
         
         final userObj = response['user'] ?? {};
-        _currentUser = AuthUser(
-          id: userObj['id'] ?? '',
-          name: userObj['name'] ?? fullName,
-          email: userObj['email'] ?? email,
-          roles: _parseRoles(userObj, fallback: UserRole.parent),
+        _studentListNotifier?.reset();
+        await _setCurrentUserAndPersist(
+          AuthUser(
+            id: userObj['id'] ?? '',
+            name: userObj['name'] ?? fullName,
+            email: userObj['email'] ?? email,
+            roles: _parseRoles(userObj, fallback: UserRole.parent),
+          ),
         );
-
-        notifyListeners();
         return true;
       }
       return false;
@@ -156,14 +192,14 @@ class ApiAuthService extends AuthService {
         await _apiClient.setToken(response['token']);
         
         final userObj = response['user'] ?? {};
-        _currentUser = AuthUser(
-          id: userObj['id'] ?? '',
-          name: userObj['name'] ?? fullName,
-          email: userObj['email'] ?? email,
-          roles: _parseRoles(userObj, fallback: UserRole.driver),
+        await _setCurrentUserAndPersist(
+          AuthUser(
+            id: userObj['id'] ?? '',
+            name: userObj['name'] ?? fullName,
+            email: userObj['email'] ?? email,
+            roles: _parseRoles(userObj, fallback: UserRole.driver),
+          ),
         );
-
-        notifyListeners();
         return true;
       }
       return false;
@@ -191,14 +227,14 @@ class ApiAuthService extends AuthService {
         await _apiClient.setToken(response['token']);
 
         final userObj = response['user'] ?? {};
-        _currentUser = AuthUser(
-          id: userObj['id'] ?? _currentUser?.id ?? '',
-          name: userObj['name'] ?? _currentUser?.name ?? '',
-          email: userObj['email'] ?? _currentUser?.email ?? '',
-          roles: _parseRoles(userObj, fallback: UserRole.parent),
+        await _setCurrentUserAndPersist(
+          AuthUser(
+            id: userObj['id'] ?? _currentUser?.id ?? '',
+            name: userObj['name'] ?? _currentUser?.name ?? '',
+            email: userObj['email'] ?? _currentUser?.email ?? '',
+            roles: _parseRoles(userObj, fallback: UserRole.parent),
+          ),
         );
-
-        notifyListeners();
         return true;
       }
       return false;
@@ -211,7 +247,9 @@ class ApiAuthService extends AuthService {
   @override
   Future<void> logout() async {
     await _apiClient.clearToken();
+    await _apiClient.clearUserData();
     _currentUser = null;
+    _studentListNotifier?.reset();
     notifyListeners();
   }
 }

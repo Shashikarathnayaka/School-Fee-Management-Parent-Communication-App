@@ -20,6 +20,7 @@ class ApiException implements Exception {
 class ApiClient {
   final SharedPreferences _prefs;
   static const String _tokenKey = 'jwt_token';
+  static const String _userDataKey = 'user_data';
 
   ApiClient(this._prefs);
 
@@ -32,6 +33,18 @@ class ApiClient {
   }
 
   String? get token => _prefs.getString(_tokenKey);
+
+  Future<void> setUserData(String json) async {
+    await _prefs.setString(_userDataKey, json);
+  }
+
+  String? getUserData() => _prefs.getString(_userDataKey);
+
+  String? get userData => _prefs.getString(_userDataKey);
+
+  Future<void> clearUserData() async {
+    await _prefs.remove(_userDataKey);
+  }
 
   Map<String, String> get _headers {
     final headers = {

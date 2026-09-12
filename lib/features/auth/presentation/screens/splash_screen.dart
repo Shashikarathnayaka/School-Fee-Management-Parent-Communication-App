@@ -5,15 +5,18 @@ import 'package:go_router/go_router.dart';
 import '../../../../app/theme/app_colors.dart';
 import '../../../../core/constants/app_routes.dart';
 import '../../../../core/constants/app_strings.dart';
+import '../../../../core/services/active_role_notifier.dart';
 import '../../../../core/services/auth_service.dart';
 import '../widgets/school_pay_logo.dart';
 
 class SplashScreen extends StatefulWidget {
   final AuthService authService;
+  final ActiveRoleNotifier? activeRoleNotifier;
 
   const SplashScreen({
     super.key,
     required this.authService,
+    this.activeRoleNotifier,
   });
 
   @override
@@ -59,6 +62,10 @@ class _SplashScreenState extends State<SplashScreen>
       if (!mounted) return;
 
       if (isAuthenticated) {
+        final user = widget.authService.currentUser;
+        if (user != null && widget.activeRoleNotifier != null) {
+          widget.activeRoleNotifier!.value = user.role;
+        }
         context.go(AppRoutes.home);
       } else {
         context.go(AppRoutes.login);

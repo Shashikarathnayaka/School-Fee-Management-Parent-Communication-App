@@ -1,6 +1,7 @@
 import 'package:flutter/foundation.dart';
 import '../models/auth_user.dart';
 import '../models/user_role.dart';
+import 'student_list_notifier.dart';
 
 /// Abstract AuthService defining the contract for authentication actions.
 abstract class AuthService extends ChangeNotifier {
@@ -40,6 +41,11 @@ abstract class AuthService extends ChangeNotifier {
 
 /// Lightweight mock implementation of AuthService for development phase.
 class MockAuthService extends AuthService {
+  final StudentListNotifier? _studentListNotifier;
+
+  MockAuthService({StudentListNotifier? studentListNotifier})
+      : _studentListNotifier = studentListNotifier;
+
   // Development-only test credentials
   static const String devParentEmail = 'parent@test.com';
   static const String devParentPassword = 'Parent@123';
@@ -73,6 +79,7 @@ class MockAuthService extends AuthService {
     final trimmed = emailOrPhone.trim().toLowerCase();
 
     if (trimmed == devParentEmail.toLowerCase() && password == devParentPassword) {
+      _studentListNotifier?.reset();
       _currentUser = const AuthUser(
         id: 'usr_parent_01',
         name: 'Shashi Karathnayaka',
@@ -84,6 +91,7 @@ class MockAuthService extends AuthService {
     }
 
     if (trimmed == devDriverEmail.toLowerCase() && password == devDriverPassword) {
+      _studentListNotifier?.reset();
       _currentUser = const AuthUser(
         id: 'usr_driver_01',
         name: 'Kamal Silva',
@@ -163,6 +171,7 @@ class MockAuthService extends AuthService {
   @override
   Future<void> logout() async {
     await Future.delayed(const Duration(milliseconds: 300));
+    _studentListNotifier?.reset();
     _currentUser = null;
     notifyListeners();
   }

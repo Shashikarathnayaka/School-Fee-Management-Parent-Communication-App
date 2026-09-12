@@ -62,6 +62,16 @@ class StudentListNotifier extends ChangeNotifier {
     await fetchStudents(force: true);
   }
 
+  /// Resets the notifier state and clears all cached students.
+  /// Next call to [fetchStudents] will force a fresh fetch from the API.
+  void reset() {
+    _students = [];
+    _isLoading = false;
+    _hasFetchError = false;
+    _hasLoaded = false;
+    notifyListeners();
+  }
+
   /// Adds a newly created student to the local list immediately and syncs with backend.
   Future<void> onStudentAdded(Student student) async {
     // Immediate optimistic update
