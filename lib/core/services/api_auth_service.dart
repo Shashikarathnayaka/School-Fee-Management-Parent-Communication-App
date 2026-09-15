@@ -122,7 +122,7 @@ class ApiAuthService extends AuthService {
       return false;
     } catch (e) {
       debugPrint('Login error: $e');
-      return false;
+      rethrow;
     }
   }
 
@@ -162,7 +162,7 @@ class ApiAuthService extends AuthService {
       return false;
     } catch (e) {
       debugPrint('Register error: $e');
-      return false;
+      rethrow;
     }
   }
 
@@ -205,7 +205,7 @@ class ApiAuthService extends AuthService {
       return false;
     } catch (e) {
       debugPrint('Register error: $e');
-      return false;
+      rethrow;
     }
   }
 
@@ -240,7 +240,7 @@ class ApiAuthService extends AuthService {
       return false;
     } catch (e) {
       debugPrint('Become driver error: $e');
-      return false;
+      rethrow;
     }
   }
 

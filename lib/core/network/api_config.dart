@@ -1,9 +1,14 @@
 class ApiConfig {
-  // Use 10.0.2.2 for Android Emulator connecting to localhost
-  // Use localhost or 127.0.0.1 for iOS Simulator
-  // Use your computer's local IP address for physical devices
-  // static const String baseUrl = 'http://10.0.2.2:3000';
-  static const String baseUrl = 'https://school-fee-management-tau.vercel.app';
+  // Active API Base URL: Defaults to production Vercel backend URL.
+  // Can be overridden at build/run time via: --dart-define=API_BASE_URL=http://10.0.2.2:3000
+  //
+  // Alternative dev URLs for reference:
+  // - Android Emulator: http://10.0.2.2:3000
+  // - iOS Simulator / Local PC: http://localhost:3000
+  static const String baseUrl = String.fromEnvironment(
+    'API_BASE_URL',
+    defaultValue: 'https://school-fee-management-tau.vercel.app',
+  );
 
   // Auth Endpoints
   static const String login = '$baseUrl/auth/login';

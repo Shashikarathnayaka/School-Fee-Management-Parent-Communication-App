@@ -4,6 +4,7 @@ import 'package:go_router/go_router.dart';
 import '../../../../app/theme/app_colors.dart';
 import '../../../../core/constants/app_routes.dart';
 import '../../../../core/constants/app_strings.dart';
+import '../../../../core/network/api_client.dart';
 import '../../../../core/services/active_role_notifier.dart';
 import '../../../../core/services/auth_service.dart';
 import '../widgets/auth_button.dart';
@@ -75,36 +76,54 @@ class _LoginScreenState extends State<LoginScreen> {
       _isLoading = true;
     });
 
-    final success = await widget.authService.login(
-      emailOrPhone: _emailOrPhoneController.text.trim(),
-      password: _passwordController.text,
-    );
-
-    if (!mounted) return;
-
-    setState(() {
-      _isLoading = false;
-    });
-
-    if (success) {
-      final user = widget.authService.currentUser;
-      if (user != null) {
-        widget.activeRoleNotifier.value = user.role;
-      }
-      
-      ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(
-          content: Text(AppStrings.mockLoginSuccess),
-          backgroundColor: AppColors.success,
-          duration: Duration(seconds: 1),
-        ),
+    try {
+      final success = await widget.authService.login(
+        emailOrPhone: _emailOrPhoneController.text.trim(),
+        password: _passwordController.text,
       );
-      context.go(AppRoutes.home);
-    } else {
+
+      if (!mounted) return;
+
+      setState(() {
+        _isLoading = false;
+      });
+
+      if (success) {
+        final user = widget.authService.currentUser;
+        if (user != null) {
+          widget.activeRoleNotifier.value = user.role;
+        }
+        
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(
+            content: Text(AppStrings.mockLoginSuccess),
+            backgroundColor: AppColors.success,
+            duration: Duration(seconds: 1),
+          ),
+        );
+        context.go(AppRoutes.home);
+      } else {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(
+            content: Text(AppStrings.invalidCredentials),
+            backgroundColor: AppColors.error,
+          ),
+        );
+      }
+    } catch (e) {
+      if (!mounted) return;
+
+      setState(() {
+        _isLoading = false;
+      });
+
+      final errorMessage = formatErrorMessage(e);
       ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(
-          content: Text(AppStrings.invalidCredentials),
+        SnackBar(
+          content: Text(errorMessage),
           backgroundColor: AppColors.error,
+          behavior: SnackBarBehavior.floating,
+          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
         ),
       );
     }

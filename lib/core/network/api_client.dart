@@ -1,4 +1,6 @@
+import 'dart:async';
 import 'dart:convert';
+import 'dart:io';
 import 'package:http/http.dart' as http;
 import 'package:shared_preferences/shared_preferences.dart';
 
@@ -15,6 +17,31 @@ class ApiException implements Exception {
 
   @override
   String toString() => message;
+}
+
+/// Helper function to format exceptions into clear, human-readable error messages for UI display.
+String formatErrorMessage(dynamic error) {
+  if (error is SocketException) {
+    return 'No internet connection or server unreachable. Please check your network connection.';
+  } else if (error is TimeoutException) {
+    return 'Server took too long to respond. Please try again.';
+  } else if (error is ApiException) {
+    return error.message;
+  } else if (error is http.ClientException) {
+    final lowerMsg = error.message.toLowerCase();
+    if (lowerMsg.contains('socket') ||
+        lowerMsg.contains('failed host lookup') ||
+        lowerMsg.contains('connection refused') ||
+        lowerMsg.contains('network is unreachable')) {
+      return 'No internet connection or server unreachable.';
+    }
+    return error.message;
+  } else if (error is Exception) {
+    final msg = error.toString().replaceFirst(RegExp(r'^Exception:\s*'), '');
+    return msg.isNotEmpty ? msg : 'An unexpected error occurred.';
+  } else {
+    return 'An unexpected error occurred. Please try again.';
+  }
 }
 
 class ApiClient {
@@ -97,30 +124,38 @@ class ApiClient {
   }
 
   Future<dynamic> get(String url) async {
-    final response = await http.get(Uri.parse(url), headers: _headers);
+    final response = await http
+        .get(Uri.parse(url), headers: _headers)
+        .timeout(const Duration(seconds: 15));
     return _processResponse(response);
   }
 
   Future<dynamic> post(String url, {Map<String, dynamic>? body}) async {
-    final response = await http.post(
-      Uri.parse(url),
-      headers: _headers,
-      body: body != null ? jsonEncode(body) : null,
-    );
+    final response = await http
+        .post(
+          Uri.parse(url),
+          headers: _headers,
+          body: body != null ? jsonEncode(body) : null,
+        )
+        .timeout(const Duration(seconds: 15));
     return _processResponse(response);
   }
 
   Future<dynamic> patch(String url, {Map<String, dynamic>? body}) async {
-    final response = await http.patch(
-      Uri.parse(url),
-      headers: _headers,
-      body: body != null ? jsonEncode(body) : null,
-    );
+    final response = await http
+        .patch(
+          Uri.parse(url),
+          headers: _headers,
+          body: body != null ? jsonEncode(body) : null,
+        )
+        .timeout(const Duration(seconds: 15));
     return _processResponse(response);
   }
 
   Future<dynamic> delete(String url) async {
-    final response = await http.delete(Uri.parse(url), headers: _headers);
+    final response = await http
+        .delete(Uri.parse(url), headers: _headers)
+        .timeout(const Duration(seconds: 15));
     return _processResponse(response);
   }
 }
