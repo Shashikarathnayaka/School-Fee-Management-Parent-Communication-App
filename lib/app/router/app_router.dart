@@ -98,6 +98,7 @@ abstract class AppRouter {
           builder: (context, state) => PaymentsScreen(
             authService: authService,
             activeRoleNotifier: activeRoleNotifier,
+            parentApiService: parentApiService,
           ),
         ),
         GoRoute(
@@ -106,6 +107,8 @@ abstract class AppRouter {
           builder: (context, state) => NotificationsScreen(
             authService: authService,
             activeRoleNotifier: activeRoleNotifier,
+            parentApiService: parentApiService,
+            driverApiService: driverApiService,
           ),
         ),
         GoRoute(

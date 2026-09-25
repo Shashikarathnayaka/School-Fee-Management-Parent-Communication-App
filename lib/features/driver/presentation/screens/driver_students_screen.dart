@@ -9,7 +9,6 @@ import '../../../../core/services/active_role_notifier.dart';
 import '../../../../core/services/auth_service.dart';
 import '../../../../core/services/driver_api_service.dart';
 import '../../../../core/services/service_locator.dart';
-import '../../../home/data/mock_home_data.dart';
 import '../../../home/domain/models/fee_summary.dart';
 import '../../../home/domain/models/payment_record.dart';
 import '../../../home/presentation/widgets/app_bottom_nav_bar.dart';
@@ -152,11 +151,9 @@ class _DriverStudentsScreenState extends State<DriverStudentsScreen> {
   }
 
   void _showPaymentStatus(BuildContext context, Student student) {
-    // Note: Reading from MockHomeData.routeStudentPayments as placeholder
-    // until backend provides driver student fee payment status endpoint.
-    final payments = MockHomeData.routeStudentPayments
-        .where((p) => p.studentId == student.id)
-        .toList();
+    // TODO(backend): needs GET /driver/routes/:routeId/payments or similar
+    // Endpoint does not exist yet for route student payments.
+    final List<PaymentRecord> payments = [];
 
     showModalBottomSheet(
       context: context,

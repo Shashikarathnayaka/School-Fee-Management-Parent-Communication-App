@@ -39,7 +39,9 @@ abstract class AuthService extends ChangeNotifier {
   Future<void> logout();
 }
 
-/// Lightweight mock implementation of AuthService for development phase.
+/// Lightweight mock implementation of AuthService strictly reserved for unit/widget tests.
+/// Production code must use [ApiAuthService] configured in [ServiceLocator].
+@visibleForTesting
 class MockAuthService extends AuthService {
   final StudentListNotifier? _studentListNotifier;
 

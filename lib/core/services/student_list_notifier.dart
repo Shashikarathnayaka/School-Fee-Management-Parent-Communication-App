@@ -1,6 +1,5 @@
 import 'package:flutter/foundation.dart';
 
-import '../../features/home/data/mock_home_data.dart';
 import '../models/student.dart';
 import 'parent_api_service.dart';
 
@@ -50,8 +49,7 @@ class StudentListNotifier extends ChangeNotifier {
     } catch (_) {
       _isLoading = false;
       _hasFetchError = true;
-      // Fallback to mock data on offline or genuine fetch error
-      _students = MockHomeData.students;
+      _students = [];
       _hasLoaded = true;
       notifyListeners();
     }
