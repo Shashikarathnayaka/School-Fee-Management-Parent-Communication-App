@@ -33,8 +33,13 @@ class NotificationsScreen extends StatefulWidget {
 }
 
 class _NotificationsScreenState extends State<NotificationsScreen> {
+  // ParentApiService can be constructed with no mandatory args (ApiClient is
+  // optional), so default locally like the other screens.
   late final ParentApiService _parentApiService =
-      widget.parentApiService ?? ServiceLocator.instance.parentApiService;
+      widget.parentApiService ?? ParentApiService();
+
+  // DriverApiService requires an ApiClient, so fall back to ServiceLocator when
+  // no test mock is injected.
   late final DriverApiService _driverApiService =
       widget.driverApiService ?? ServiceLocator.instance.driverApiService;
 
@@ -60,30 +65,17 @@ class _NotificationsScreenState extends State<NotificationsScreen> {
     _loadNotifications();
   }
 
-  String _formatNotificationTime(DateTime? dt) {
-    if (dt == null) return '';
-    final diff = DateTime.now().difference(dt);
-    if (diff.inMinutes < 1) return 'Just now';
-    if (diff.inMinutes < 60) return '${diff.inMinutes}m ago';
-    if (diff.inHours < 24) return '${diff.inHours}h ago';
-    if (diff.inDays == 1) return 'Yesterday';
-    if (diff.inDays < 7) return '${diff.inDays}d ago';
-    const months = [
-      'Jan',
-      'Feb',
-      'Mar',
-      'Apr',
-      'May',
-      'Jun',
-      'Jul',
-      'Aug',
-      'Sep',
-      'Oct',
-      'Nov',
-      'Dec',
-    ];
-    final m = (dt.month >= 1 && dt.month <= 12) ? months[dt.month - 1] : '';
-    return '${dt.day} $m';
+  /// Maps a raw [AppNotification] from the API to a [NotificationItem] for the
+  /// UI, using the shared [NotificationItem.formatTime] helper so the time
+  /// logic is never duplicated.
+  NotificationItem _toNotificationItem(AppNotification n) {
+    return NotificationItem(
+      id: n.id,
+      title: n.title,
+      message: n.message,
+      time: NotificationItem.formatTime(n.createdAt),
+      isRead: n.isRead,
+    );
   }
 
   Future<void> _loadNotifications({bool isRefresh = false}) async {
@@ -103,19 +95,9 @@ class _NotificationsScreenState extends State<NotificationsScreen> {
         rawList = await _parentApiService.getNotifications();
       }
 
-      final items = rawList.map((n) {
-        return NotificationItem(
-          id: n.id,
-          title: n.title,
-          message: n.message,
-          time: _formatNotificationTime(n.createdAt),
-          isRead: n.isRead,
-        );
-      }).toList();
-
       if (!mounted) return;
       setState(() {
-        _notifications = items;
+        _notifications = rawList.map(_toNotificationItem).toList();
         _isLoading = false;
         _errorMessage = null;
       });
@@ -125,6 +107,40 @@ class _NotificationsScreenState extends State<NotificationsScreen> {
         _isLoading = false;
         _errorMessage = 'Failed to load notifications. Please try again.';
       });
+    }
+  }
+
+  /// Called when the user taps a notification row.
+  /// Marks it as read via the API and immediately reflects the change in the
+  /// UI without waiting for a full re-fetch.
+  Future<void> _onNotificationTap(NotificationItem item) async {
+    if (item.isRead) return;
+
+    // Optimistically update the UI.
+    final index = _notifications.indexWhere((n) => n.id == item.id);
+    if (index != -1) {
+      setState(() {
+        _notifications = List<NotificationItem>.from(_notifications)
+          ..[index] = item.copyWith(isRead: true);
+      });
+    }
+
+    try {
+      final isDriver = widget.activeRoleNotifier.value == UserRole.driver;
+      if (isDriver) {
+        await _driverApiService.readNotification(item.id);
+      } else {
+        await _parentApiService.readNotification(item.id);
+      }
+    } catch (_) {
+      // Silently revert the optimistic update on failure.
+      if (!mounted) return;
+      if (index != -1) {
+        setState(() {
+          _notifications = List<NotificationItem>.from(_notifications)
+            ..[index] = item;
+        });
+      }
     }
   }
 
@@ -227,6 +243,7 @@ class _NotificationsScreenState extends State<NotificationsScreen> {
                   )
                 else if (_errorMessage != null)
                   Container(
+                    width: double.infinity,
                     padding: const EdgeInsets.all(16),
                     decoration: BoxDecoration(
                       color: AppColors.surfaceWhite,
@@ -253,6 +270,7 @@ class _NotificationsScreenState extends State<NotificationsScreen> {
                 else
                   NotificationPreviewCard(
                     notifications: _notifications,
+                    onItemTap: _onNotificationTap,
                   ),
               ],
             ),

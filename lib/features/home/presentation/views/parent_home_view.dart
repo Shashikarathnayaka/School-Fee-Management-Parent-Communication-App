@@ -810,7 +810,7 @@ class _ParentHomeViewState extends State<ParentHomeView> {
                 else
                   NotificationPreviewCard(
                     notifications: _notifications,
-                    onItemTap: () => context.go(AppRoutes.notifications),
+                    onItemTap: (_) => context.go(AppRoutes.notifications),
                   ),
                 const SizedBox(height: 20),
               ],

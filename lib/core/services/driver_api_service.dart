@@ -1,3 +1,4 @@
+import '../../features/driver/domain/models/pickup_record.dart';
 import '../models/driver_profile.dart';
 import '../models/driver_route.dart';
 import '../models/notification_model.dart';
@@ -136,5 +137,25 @@ class DriverApiService {
 
   Future<void> readNotification(String id) async {
     await _apiClient.patch('${ApiConfig.driverNotifications}/$id/read');
+  }
+
+  Future<List<PickupRecord>> getHistory({String? date, String? routeId}) async {
+    final queryParams = <String, String>{};
+    if (date != null && date.isNotEmpty) queryParams['date'] = date;
+    if (routeId != null && routeId.isNotEmpty) queryParams['routeId'] = routeId;
+
+    final url = queryParams.isEmpty
+        ? ApiConfig.driverHistory
+        : Uri.parse(ApiConfig.driverHistory)
+            .replace(queryParameters: queryParams)
+            .toString();
+
+    final response = await _apiClient.get(url);
+    if (response != null && response['history'] is List) {
+      return (response['history'] as List)
+          .map((e) => PickupRecord.fromJson(Map<String, dynamic>.from(e as Map)))
+          .toList();
+    }
+    return [];
   }
 }

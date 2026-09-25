@@ -6,17 +6,85 @@ import '../../../../core/constants/app_routes.dart';
 import '../../../../core/models/user_role.dart';
 import '../../../../core/services/active_role_notifier.dart';
 import '../../../../core/services/auth_service.dart';
-import '../../../../features/home/presentation/widgets/app_bottom_nav_bar.dart';
+import '../../../../core/services/parent_api_service.dart';
+import '../../../home/domain/models/payment_record.dart';
+import '../../../home/presentation/widgets/app_bottom_nav_bar.dart';
+import '../../../home/presentation/widgets/recent_payments_card.dart';
 
-class ReceiptsScreen extends StatelessWidget {
+class ReceiptsScreen extends StatefulWidget {
   final AuthService authService;
   final ActiveRoleNotifier activeRoleNotifier;
+  final ParentApiService? parentApiService;
 
   const ReceiptsScreen({
     super.key,
     required this.authService,
     required this.activeRoleNotifier,
+    this.parentApiService,
   });
+
+  @override
+  State<ReceiptsScreen> createState() => _ReceiptsScreenState();
+}
+
+class _ReceiptsScreenState extends State<ReceiptsScreen> {
+  late final ParentApiService _apiService =
+      widget.parentApiService ?? ParentApiService();
+
+  List<PaymentRecord> _receipts = [];
+  bool _isLoading = true;
+  String? _errorMessage;
+
+  @override
+  void initState() {
+    super.initState();
+    if (widget.activeRoleNotifier.value != UserRole.driver) {
+      _loadReceipts();
+    } else {
+      _isLoading = false;
+    }
+  }
+
+  Future<void> _loadReceipts({bool isRefresh = false}) async {
+    if (widget.activeRoleNotifier.value == UserRole.driver) {
+      if (!mounted) return;
+      setState(() {
+        _isLoading = false;
+        _receipts = [];
+        _errorMessage = null;
+      });
+      return;
+    }
+
+    if (!isRefresh) {
+      setState(() {
+        _isLoading = true;
+        _errorMessage = null;
+      });
+    }
+
+    try {
+      final fees = await _apiService.getFees();
+      if (!mounted) return;
+
+      final paidFees = fees
+          .where((fee) => fee.status.trim().toUpperCase() == 'PAID')
+          .map(PaymentRecord.fromFee)
+          .toList();
+
+      setState(() {
+        _receipts = paidFees;
+        _isLoading = false;
+        _errorMessage = null;
+      });
+    } catch (e) {
+      if (!mounted) return;
+      setState(() {
+        _isLoading = false;
+        _errorMessage = 'Failed to load receipts. Please try again.';
+      });
+    }
+  }
 
   void _onBottomNavTapped(BuildContext context, int index, bool isDriver) {
     if (isDriver) {
@@ -57,7 +125,7 @@ class ReceiptsScreen extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final activeRole = activeRoleNotifier.value;
+    final activeRole = widget.activeRoleNotifier.value;
     final isDriver = activeRole == UserRole.driver;
 
     return Scaffold(
@@ -79,52 +147,114 @@ class ReceiptsScreen extends StatelessWidget {
         onTap: (index) => _onBottomNavTapped(context, index, isDriver),
       ),
       body: SafeArea(
-        child: Padding(
-          padding: const EdgeInsets.all(20.0),
-          child: Column(
-            mainAxisAlignment: MainAxisAlignment.center,
-            crossAxisAlignment: CrossAxisAlignment.center,
-            children: [
-              Container(
-                padding: const EdgeInsets.all(20),
-                decoration: const BoxDecoration(
-                  color: AppColors.primaryBlueLight,
-                  shape: BoxShape.circle,
+        child: isDriver
+            ? const Center(
+                child: Padding(
+                  padding: EdgeInsets.all(24.0),
+                  child: Text(
+                    'Receipts are only available for parents.',
+                    style: TextStyle(
+                      color: AppColors.textSecondary,
+                      fontSize: 15,
+                    ),
+                    textAlign: TextAlign.center,
+                  ),
                 ),
-                child: const Icon(
-                  Icons.receipt_long_rounded,
-                  size: 48,
-                  color: AppColors.primaryBlue,
+              )
+            : RefreshIndicator(
+                color: AppColors.primaryBlue,
+                onRefresh: () => _loadReceipts(isRefresh: true),
+                child: SingleChildScrollView(
+                  physics: const AlwaysScrollableScrollPhysics(
+                    parent: BouncingScrollPhysics(),
+                  ),
+                  padding: const EdgeInsets.all(20.0),
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.stretch,
+                    children: [
+                      Center(
+                        child: Column(
+                          children: [
+                            Container(
+                              padding: const EdgeInsets.all(20),
+                              decoration: const BoxDecoration(
+                                color: AppColors.primaryBlueLight,
+                                shape: BoxShape.circle,
+                              ),
+                              child: const Icon(
+                                Icons.receipt_long_rounded,
+                                size: 48,
+                                color: AppColors.primaryBlue,
+                              ),
+                            ),
+                            const SizedBox(height: 16),
+                            const Text(
+                              'Payment Receipts',
+                              style: TextStyle(
+                                fontSize: 20,
+                                fontWeight: FontWeight.bold,
+                                color: AppColors.primaryNavy,
+                              ),
+                            ),
+                            const SizedBox(height: 6),
+                            const Text(
+                              'Your paid fee receipts',
+                              textAlign: TextAlign.center,
+                              style: TextStyle(
+                                color: AppColors.textSecondary,
+                                fontSize: 14,
+                              ),
+                            ),
+                          ],
+                        ),
+                      ),
+                      const SizedBox(height: 24),
+                      if (_isLoading)
+                        Container(
+                          height: 140,
+                          alignment: Alignment.center,
+                          child: const CircularProgressIndicator(
+                            strokeWidth: 2.5,
+                            valueColor: AlwaysStoppedAnimation<Color>(
+                              AppColors.primaryBlue,
+                            ),
+                          ),
+                        )
+                      else if (_errorMessage != null)
+                        Container(
+                          width: double.infinity,
+                          padding: const EdgeInsets.all(16),
+                          decoration: BoxDecoration(
+                            color: AppColors.surfaceWhite,
+                            borderRadius: BorderRadius.circular(16),
+                            border: Border.all(
+                              color: AppColors.error.withValues(alpha: 0.3),
+                            ),
+                          ),
+                          child: Column(
+                            children: [
+                              Text(
+                                _errorMessage!,
+                                textAlign: TextAlign.center,
+                                style: const TextStyle(color: AppColors.error),
+                              ),
+                              const SizedBox(height: 12),
+                              OutlinedButton(
+                                onPressed: () => _loadReceipts(),
+                                child: const Text('Retry'),
+                              ),
+                            ],
+                          ),
+                        )
+                      else
+                        RecentPaymentsCard(
+                          payments: _receipts,
+                          emptyMessage: 'No receipts yet',
+                        ),
+                    ],
+                  ),
                 ),
               ),
-              const SizedBox(height: 20),
-              const Text(
-                'Receipts Module',
-                style: TextStyle(
-                  fontSize: 20,
-                  fontWeight: FontWeight.bold,
-                  color: AppColors.primaryNavy,
-                ),
-              ),
-              const SizedBox(height: 8),
-              const Text(
-                'Official school fee payment receipts will be downloadable here in future releases.',
-                textAlign: TextAlign.center,
-                style: TextStyle(
-                  color: AppColors.textSecondary,
-                  fontSize: 14,
-                  height: 1.4,
-                ),
-              ),
-              const SizedBox(height: 24),
-              ElevatedButton.icon(
-                onPressed: () => context.go(AppRoutes.home),
-                icon: const Icon(Icons.arrow_back_rounded),
-                label: const Text('Back to Home'),
-              ),
-            ],
-          ),
-        ),
       ),
     );
   }

@@ -5,7 +5,7 @@ import '../../domain/models/notification_item.dart';
 
 class NotificationPreviewCard extends StatelessWidget {
   final List<NotificationItem> notifications;
-  final VoidCallback? onItemTap;
+  final void Function(NotificationItem item)? onItemTap;
 
   const NotificationPreviewCard({
     super.key,
@@ -50,7 +50,7 @@ class NotificationPreviewCard extends StatelessWidget {
           final item = notifications[index];
           return ListTile(
             contentPadding: const EdgeInsets.symmetric(horizontal: 16, vertical: 4),
-            onTap: onItemTap,
+            onTap: onItemTap != null ? () => onItemTap!(item) : null,
             leading: Container(
               padding: const EdgeInsets.all(8),
               decoration: BoxDecoration(

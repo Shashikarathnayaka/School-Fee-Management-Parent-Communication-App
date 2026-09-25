@@ -3,13 +3,10 @@ import 'package:go_router/go_router.dart';
 
 import '../../../../app/theme/app_colors.dart';
 import '../../../../core/constants/app_routes.dart';
-import '../../../../core/models/fee.dart';
 import '../../../../core/models/user_role.dart';
 import '../../../../core/services/active_role_notifier.dart';
 import '../../../../core/services/auth_service.dart';
 import '../../../../core/services/parent_api_service.dart';
-import '../../../../core/services/service_locator.dart';
-import '../../../home/domain/models/fee_summary.dart';
 import '../../../home/domain/models/payment_record.dart';
 import '../../../home/presentation/widgets/app_bottom_nav_bar.dart';
 import '../../../home/presentation/widgets/recent_payments_card.dart';
@@ -31,8 +28,8 @@ class PaymentsScreen extends StatefulWidget {
 }
 
 class _PaymentsScreenState extends State<PaymentsScreen> {
-  late final ParentApiService _parentApiService =
-      widget.parentApiService ?? ServiceLocator.instance.parentApiService;
+  late final ParentApiService _apiService =
+      widget.parentApiService ?? ParentApiService();
 
   List<PaymentRecord> _payments = [];
   bool _isLoading = true;
@@ -41,29 +38,24 @@ class _PaymentsScreenState extends State<PaymentsScreen> {
   @override
   void initState() {
     super.initState();
-    _loadPayments();
-  }
-
-  String _monthName(int month) {
-    const months = [
-      'Jan',
-      'Feb',
-      'Mar',
-      'Apr',
-      'May',
-      'Jun',
-      'Jul',
-      'Aug',
-      'Sep',
-      'Oct',
-      'Nov',
-      'Dec',
-    ];
-    if (month >= 1 && month <= 12) return months[month - 1];
-    return '';
+    if (widget.activeRoleNotifier.value != UserRole.driver) {
+      _loadPayments();
+    } else {
+      _isLoading = false;
+    }
   }
 
   Future<void> _loadPayments({bool isRefresh = false}) async {
+    if (widget.activeRoleNotifier.value == UserRole.driver) {
+      if (!mounted) return;
+      setState(() {
+        _isLoading = false;
+        _payments = [];
+        _errorMessage = null;
+      });
+      return;
+    }
+
     if (!isRefresh) {
       setState(() {
         _isLoading = true;
@@ -72,37 +64,11 @@ class _PaymentsScreenState extends State<PaymentsScreen> {
     }
 
     try {
-      final List<Fee> fees = await _parentApiService.getFees();
-      final paidFees = fees
-          .where((f) => f.status.toUpperCase() == 'PAID')
-          .toList();
-
-      final records = paidFees.map((f) {
-        final dateStr = f.dueDate != null
-            ? '${f.dueDate!.day} ${_monthName(f.dueDate!.month)} ${f.dueDate!.year}'
-            : 'Paid';
-        final formattedAmount =
-            'Rs. ${f.amount.toStringAsFixed(0).replaceAllMapped(RegExp(r'(\d{1,3})(?=(\d{3})+(?!\d))'), (m) => '${m[1]},')}';
-
-        return PaymentRecord(
-          id: f.id,
-          title: f.description?.isNotEmpty == true
-              ? f.description!
-              : (f.studentName != null
-                  ? '${f.studentName} - School Fee'
-                  : 'School Fee'),
-          date: dateStr,
-          amount: formattedAmount,
-          status: FeeStatus.paid,
-          hasReceipt: true,
-          studentId: f.studentId,
-          studentName: f.studentName ?? '',
-        );
-      }).toList();
-
+      final fees = await _apiService.getFees();
       if (!mounted) return;
+
       setState(() {
-        _payments = records;
+        _payments = fees.map(PaymentRecord.fromFee).toList();
         _isLoading = false;
         _errorMessage = null;
       });
@@ -214,11 +180,14 @@ class _PaymentsScreenState extends State<PaymentsScreen> {
                   )
                 else if (_errorMessage != null)
                   Container(
+                    width: double.infinity,
                     padding: const EdgeInsets.all(16),
                     decoration: BoxDecoration(
                       color: AppColors.surfaceWhite,
                       borderRadius: BorderRadius.circular(16),
-                      border: Border.all(color: AppColors.error.withValues(alpha: 0.3)),
+                      border: Border.all(
+                        color: AppColors.error.withValues(alpha: 0.3),
+                      ),
                     ),
                     child: Column(
                       children: [

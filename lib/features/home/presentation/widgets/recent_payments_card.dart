@@ -6,10 +6,12 @@ import 'status_badge.dart';
 
 class RecentPaymentsCard extends StatelessWidget {
   final List<PaymentRecord> payments;
+  final String emptyMessage;
 
   const RecentPaymentsCard({
     super.key,
     required this.payments,
+    this.emptyMessage = 'No recent payment records',
   });
 
   @override
@@ -22,10 +24,10 @@ class RecentPaymentsCard extends StatelessWidget {
           borderRadius: BorderRadius.circular(16),
           border: Border.all(color: AppColors.cardBorder),
         ),
-        child: const Center(
+        child: Center(
           child: Text(
-            'No recent payment records',
-            style: TextStyle(color: AppColors.textSecondary),
+            emptyMessage,
+            style: const TextStyle(color: AppColors.textSecondary),
           ),
         ),
       );
