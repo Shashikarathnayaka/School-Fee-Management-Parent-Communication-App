@@ -49,17 +49,12 @@ class _ParentHomeViewState extends State<ParentHomeView> {
   Student? _selectedStudent;
   ParentProfile? _profile;
 
-  // ── Fees state ─────────────────────────────────────────────────────────────
+  // ── Dashboard state ────────────────────────────────────────────────────────
   FeeSummary? _currentFee;
   FeeSummary? _upcomingFee;
   List<PaymentRecord> _recentPayments = [];
-  bool _isLoadingFees = true;
-  String? _feeErrorMessage;
-
-  // ── Notifications state ────────────────────────────────────────────────────
   List<NotificationItem> _notifications = [];
-  bool _isLoadingNotifications = true;
-  String? _notificationErrorMessage;
+  bool _isDashboardLoading = true;
 
   /// Session-level flag to avoid showing the become-driver popup repeatedly.
   /// Resets on app restart (static so it persists across widget rebuilds).
@@ -73,9 +68,7 @@ class _ParentHomeViewState extends State<ParentHomeView> {
     _syncSelectedStudent();
     _studentListNotifier.fetchStudents();
 
-    _loadProfile();
-    _loadFees();
-    _loadNotifications();
+    _loadDashboardData();
 
     // Show become-driver popup after the first frame if the parent
     // hasn't already registered as a driver and hasn't dismissed it this session.
@@ -131,7 +124,7 @@ class _ParentHomeViewState extends State<ParentHomeView> {
     }
   }
 
-  String _monthName(int month) {
+  static String _monthName(int month) {
     const months = [
       'Jan',
       'Feb',
@@ -150,45 +143,72 @@ class _ParentHomeViewState extends State<ParentHomeView> {
     return '';
   }
 
-  String _formatNotificationTime(DateTime? dt) {
-    if (dt == null) return '';
-    final diff = DateTime.now().difference(dt);
-    if (diff.inMinutes < 1) return 'Just now';
-    if (diff.inMinutes < 60) return '${diff.inMinutes}m ago';
-    if (diff.inHours < 24) return '${diff.inHours}h ago';
-    if (diff.inDays == 1) return 'Yesterday';
-    if (diff.inDays < 7) return '${diff.inDays}d ago';
-    return '${dt.day} ${_monthName(dt.month)}';
+  FeeSummary _toFeeSummary(Fee fee, {required bool isUpcoming}) {
+    final FeeStatus status;
+    final isOverdue =
+        fee.dueDate != null && fee.dueDate!.isBefore(DateTime.now());
+    if (isUpcoming) {
+      status = FeeStatus.pending;
+    } else if (isOverdue) {
+      status = FeeStatus.overdue;
+    } else {
+      status = FeeStatus.due;
+    }
+
+    final dateStr = fee.dueDate != null
+        ? '${fee.dueDate!.day} ${_monthName(fee.dueDate!.month)} ${fee.dueDate!.year}'
+        : '';
+    final dueDateText = isUpcoming
+        ? (dateStr.isNotEmpty ? 'Due $dateStr' : 'Upcoming')
+        : (dateStr.isNotEmpty ? 'Due $dateStr' : 'Payment Due');
+
+    final formattedAmount =
+        'Rs. ${fee.amount.toStringAsFixed(0).replaceAllMapped(RegExp(r'(\d{1,3})(?=(\d{3})+(?!\d))'), (m) => '${m[1]},')}';
+
+    return FeeSummary(
+      id: fee.id,
+      title: fee.description?.isNotEmpty == true
+          ? fee.description!
+          : (fee.studentName?.isNotEmpty == true
+              ? '${fee.studentName} - School Fee'
+              : 'School Fee'),
+      status: status,
+      amount: formattedAmount,
+      dueDate: dueDateText,
+    );
   }
 
-  Future<void> _loadProfile() async {
-    try {
-      final profile = await _parentApiService.getProfile();
-      if (!mounted) return;
-      setState(() {
-        _profile = profile;
-      });
-    } catch (_) {}
-  }
-
-  Future<void> _loadFees({bool isRefresh = false}) async {
+  Future<void> _loadDashboardData({bool isRefresh = false}) async {
     if (!isRefresh) {
       setState(() {
-        _isLoadingFees = true;
-        _feeErrorMessage = null;
+        _isDashboardLoading = true;
       });
     }
 
     try {
-      final List<Fee> fees = await _parentApiService.getFees();
-      final paidFees = fees
-          .where((f) => f.status.toUpperCase() == 'PAID')
-          .toList();
+      final results = await Future.wait([
+        _parentApiService.getProfile().catchError((_) => null),
+        _parentApiService.getFees().catchError((_) => <Fee>[]),
+        _parentApiService
+            .getNotifications()
+            .catchError((_) => <AppNotification>[]),
+      ]);
+
+      if (!mounted) return;
+
+      final profile = results[0] as ParentProfile?;
+      final fees = results[1] as List<Fee>;
+      final rawNotifications = results[2] as List<AppNotification>;
+
+      if (profile != null) {
+        _profile = profile;
+      }
+
+      // Filter non-PAID fees for current & upcoming (DUE / PENDING / OVERDUE)
       final pendingFees = fees
           .where((f) => f.status.toUpperCase() != 'PAID')
           .toList();
 
-      // Sort pending fees by due date ascending
       pendingFees.sort((a, b) {
         if (a.dueDate == null && b.dueDate == null) return 0;
         if (a.dueDate == null) return 1;
@@ -196,125 +216,43 @@ class _ParentHomeViewState extends State<ParentHomeView> {
         return a.dueDate!.compareTo(b.dueDate!);
       });
 
-      // Recent payments from paid fees
-      final payments = paidFees.map((f) {
-        final dateStr = f.dueDate != null
-            ? '${f.dueDate!.day} ${_monthName(f.dueDate!.month)} ${f.dueDate!.year}'
-            : 'Paid';
-        final formattedAmount =
-            'Rs. ${f.amount.toStringAsFixed(0).replaceAllMapped(RegExp(r'(\d{1,3})(?=(\d{3})+(?!\d))'), (m) => '${m[1]},')}';
-
-        return PaymentRecord(
-          id: f.id,
-          title: f.description?.isNotEmpty == true
-              ? f.description!
-              : (f.studentName != null
-                  ? '${f.studentName} - School Fee'
-                  : 'School Fee'),
-          date: dateStr,
-          amount: formattedAmount,
-          status: FeeStatus.paid,
-          hasReceipt: true,
-          studentId: f.studentId,
-          studentName: f.studentName ?? '',
-        );
-      }).toList();
-
-      // Current due fee
-      final FeeSummary current;
+      FeeSummary? currentFee;
       if (pendingFees.isNotEmpty) {
-        final first = pendingFees.first;
-        final isOverdue =
-            first.dueDate != null && first.dueDate!.isBefore(DateTime.now());
-        current = FeeSummary(
-          id: first.id,
-          title: first.description?.isNotEmpty == true
-              ? first.description!
-              : 'School Fee',
-          status: isOverdue ? FeeStatus.overdue : FeeStatus.due,
-          amount:
-              'Rs. ${first.amount.toStringAsFixed(0).replaceAllMapped(RegExp(r'(\d{1,3})(?=(\d{3})+(?!\d))'), (m) => '${m[1]},')}',
-          dueDate: first.dueDate != null
-              ? 'Due ${first.dueDate!.day} ${_monthName(first.dueDate!.month)} ${first.dueDate!.year}'
-              : 'Payment Due',
-        );
-      } else {
-        current = const FeeSummary(
-          id: 'cleared',
-          title: 'School Fee',
-          status: FeeStatus.paid,
-          amount: 'Rs. 0',
-          dueDate: 'All fees cleared',
-        );
+        currentFee = _toFeeSummary(pendingFees.first, isUpcoming: false);
       }
 
-      // Upcoming fee
-      FeeSummary? upcoming;
+      FeeSummary? upcomingFee;
       if (pendingFees.length > 1) {
-        final next = pendingFees[1];
-        upcoming = FeeSummary(
-          id: next.id,
-          title: next.description?.isNotEmpty == true
-              ? next.description!
-              : 'School Fee',
-          status: FeeStatus.pending,
-          amount:
-              'Rs. ${next.amount.toStringAsFixed(0).replaceAllMapped(RegExp(r'(\d{1,3})(?=(\d{3})+(?!\d))'), (m) => '${m[1]},')}',
-          dueDate: next.dueDate != null
-              ? 'Due ${next.dueDate!.day} ${_monthName(next.dueDate!.month)} ${next.dueDate!.year}'
-              : 'Upcoming',
-        );
+        upcomingFee = _toFeeSummary(pendingFees[1], isUpcoming: true);
       }
 
-      if (!mounted) return;
+      // Recent payments from PAID fees sorted by date desc
+      final paidFees = fees
+          .where((f) => f.status.toUpperCase() == 'PAID')
+          .toList();
+      paidFees.sort((a, b) {
+        if (a.dueDate == null && b.dueDate == null) return 0;
+        if (a.dueDate == null) return 1;
+        if (b.dueDate == null) return -1;
+        return b.dueDate!.compareTo(a.dueDate!);
+      });
+      final recentPayments =
+          paidFees.take(5).map(PaymentRecord.fromFee).toList();
+
+      final notifications =
+          rawNotifications.map(NotificationItem.fromNotification).toList();
+
       setState(() {
-        _recentPayments = payments;
-        _currentFee = current;
-        _upcomingFee = upcoming;
-        _isLoadingFees = false;
-        _feeErrorMessage = null;
+        _currentFee = currentFee;
+        _upcomingFee = upcomingFee;
+        _recentPayments = recentPayments;
+        _notifications = notifications;
+        _isDashboardLoading = false;
       });
     } catch (_) {
       if (!mounted) return;
       setState(() {
-        _isLoadingFees = false;
-        _feeErrorMessage = 'Failed to load fee information.';
-      });
-    }
-  }
-
-  Future<void> _loadNotifications({bool isRefresh = false}) async {
-    if (!isRefresh) {
-      setState(() {
-        _isLoadingNotifications = true;
-        _notificationErrorMessage = null;
-      });
-    }
-
-    try {
-      final List<AppNotification> rawList =
-          await _parentApiService.getNotifications();
-      final items = rawList.map((n) {
-        return NotificationItem(
-          id: n.id,
-          title: n.title,
-          message: n.message,
-          time: _formatNotificationTime(n.createdAt),
-          isRead: n.isRead,
-        );
-      }).toList();
-
-      if (!mounted) return;
-      setState(() {
-        _notifications = items;
-        _isLoadingNotifications = false;
-        _notificationErrorMessage = null;
-      });
-    } catch (_) {
-      if (!mounted) return;
-      setState(() {
-        _isLoadingNotifications = false;
-        _notificationErrorMessage = 'Failed to load notifications.';
+        _isDashboardLoading = false;
       });
     }
   }
@@ -322,9 +260,7 @@ class _ParentHomeViewState extends State<ParentHomeView> {
   Future<void> _onRefresh() async {
     await Future.wait([
       _studentListNotifier.refresh(),
-      _loadProfile(),
-      _loadFees(isRefresh: true),
-      _loadNotifications(isRefresh: true),
+      _loadDashboardData(isRefresh: true),
     ]);
   }
 
@@ -657,7 +593,7 @@ class _ParentHomeViewState extends State<ParentHomeView> {
                 const SizedBox(height: 20),
 
                 // Fee Summary Card
-                if (_isLoadingFees)
+                if (_isDashboardLoading)
                   Container(
                     height: 160,
                     decoration: BoxDecoration(
@@ -673,31 +609,6 @@ class _ParentHomeViewState extends State<ParentHomeView> {
                       ),
                     ),
                   )
-                else if (_feeErrorMessage != null)
-                  Container(
-                    width: double.infinity,
-                    padding: const EdgeInsets.all(16),
-                    decoration: BoxDecoration(
-                      color: AppColors.surfaceWhite,
-                      borderRadius: BorderRadius.circular(16),
-                      border: Border.all(
-                        color: AppColors.error.withValues(alpha: 0.3),
-                      ),
-                    ),
-                    child: Column(
-                      children: [
-                        Text(
-                          _feeErrorMessage!,
-                          style: const TextStyle(color: AppColors.error),
-                        ),
-                        const SizedBox(height: 8),
-                        OutlinedButton(
-                          onPressed: () => _loadFees(),
-                          child: const Text('Retry'),
-                        ),
-                      ],
-                    ),
-                  )
                 else if (_currentFee != null)
                   FeeSummaryCard(
                     feeSummary: _currentFee!,
@@ -706,7 +617,8 @@ class _ParentHomeViewState extends State<ParentHomeView> {
                           AppStrings.paymentModulePlaceholder);
                     },
                   ),
-                const SizedBox(height: 24),
+                if (_isDashboardLoading || _currentFee != null)
+                  const SizedBox(height: 24),
 
                 // Quick Actions
                 Text(
@@ -751,7 +663,7 @@ class _ParentHomeViewState extends State<ParentHomeView> {
                   onViewAll: () => context.go(AppRoutes.payments),
                 ),
                 const SizedBox(height: 12),
-                if (_isLoadingFees)
+                if (_isDashboardLoading)
                   Container(
                     height: 80,
                     alignment: Alignment.center,
@@ -762,7 +674,7 @@ class _ParentHomeViewState extends State<ParentHomeView> {
                 const SizedBox(height: 24),
 
                 // Upcoming Fee
-                if (_upcomingFee != null) ...[
+                if (!_isDashboardLoading && _upcomingFee != null) ...[
                   Text(
                     AppStrings.upcomingFeeTitle,
                     style: theme.textTheme.titleMedium?.copyWith(
@@ -781,31 +693,11 @@ class _ParentHomeViewState extends State<ParentHomeView> {
                   onViewAll: () => context.go(AppRoutes.notifications),
                 ),
                 const SizedBox(height: 12),
-                if (_isLoadingNotifications)
+                if (_isDashboardLoading)
                   Container(
                     height: 80,
                     alignment: Alignment.center,
                     child: const CircularProgressIndicator(strokeWidth: 2),
-                  )
-                else if (_notificationErrorMessage != null)
-                  Container(
-                    padding: const EdgeInsets.all(12),
-                    child: Row(
-                      mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                      children: [
-                        Text(
-                          _notificationErrorMessage!,
-                          style: const TextStyle(
-                            color: AppColors.error,
-                            fontSize: 13,
-                          ),
-                        ),
-                        TextButton(
-                          onPressed: () => _loadNotifications(),
-                          child: const Text('Retry'),
-                        ),
-                      ],
-                    ),
                   )
                 else
                   NotificationPreviewCard(

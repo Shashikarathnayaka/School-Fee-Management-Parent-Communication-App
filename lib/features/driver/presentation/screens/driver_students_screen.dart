@@ -4,6 +4,7 @@ import 'package:go_router/go_router.dart';
 import '../../../../app/theme/app_colors.dart';
 import '../../../../core/constants/app_routes.dart';
 import '../../../../core/models/driver_route.dart';
+import '../../../../core/models/fee.dart';
 import '../../../../core/models/student.dart';
 import '../../../../core/services/active_role_notifier.dart';
 import '../../../../core/services/auth_service.dart';
@@ -151,9 +152,7 @@ class _DriverStudentsScreenState extends State<DriverStudentsScreen> {
   }
 
   void _showPaymentStatus(BuildContext context, Student student) {
-    // TODO(backend): needs GET /driver/routes/:routeId/payments or similar
-    // Endpoint does not exist yet for route student payments.
-    final List<PaymentRecord> payments = [];
+    Future<List<Fee>> feesFuture = _driverApiService.getStudentFees(student.id);
 
     showModalBottomSheet(
       context: context,
@@ -162,73 +161,143 @@ class _DriverStudentsScreenState extends State<DriverStudentsScreen> {
         borderRadius: BorderRadius.vertical(top: Radius.circular(20)),
       ),
       builder: (context) {
-        return SafeArea(
-          child: Padding(
-            padding: const EdgeInsets.all(20.0),
-            child: Column(
-              mainAxisSize: MainAxisSize.min,
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                Row(
-                  children: [
-                    CircleAvatar(
-                      backgroundColor: AppColors.primaryBlueLight,
-                      child: Text(
-                        student.initials,
-                        style: const TextStyle(
-                          color: AppColors.primaryBlue,
-                          fontWeight: FontWeight.bold,
-                        ),
-                      ),
-                    ),
-                    const SizedBox(width: 12),
-                    Expanded(
-                      child: Column(
-                        crossAxisAlignment: CrossAxisAlignment.start,
+        return StatefulBuilder(
+          builder: (context, setModalState) {
+            return SafeArea(
+              child: SingleChildScrollView(
+                child: Padding(
+                  padding: const EdgeInsets.all(20.0),
+                  child: Column(
+                    mainAxisSize: MainAxisSize.min,
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Row(
                         children: [
-                          Text(
-                            student.name,
-                            style: const TextStyle(
-                              fontSize: 16,
-                              fontWeight: FontWeight.bold,
-                              color: AppColors.primaryNavy,
+                          CircleAvatar(
+                            backgroundColor: AppColors.primaryBlueLight,
+                            child: Text(
+                              student.initials,
+                              style: const TextStyle(
+                                color: AppColors.primaryBlue,
+                                fontWeight: FontWeight.bold,
+                              ),
                             ),
                           ),
-                          Text(
-                            student.displayGrade,
-                            style: const TextStyle(
-                              fontSize: 13,
-                              color: AppColors.textSecondary,
+                          const SizedBox(width: 12),
+                          Expanded(
+                            child: Column(
+                              crossAxisAlignment: CrossAxisAlignment.start,
+                              children: [
+                                Text(
+                                  student.name,
+                                  style: const TextStyle(
+                                    fontSize: 16,
+                                    fontWeight: FontWeight.bold,
+                                    color: AppColors.primaryNavy,
+                                  ),
+                                ),
+                                Text(
+                                  student.displayGrade,
+                                  style: const TextStyle(
+                                    fontSize: 13,
+                                    color: AppColors.textSecondary,
+                                  ),
+                                ),
+                              ],
                             ),
                           ),
                         ],
                       ),
-                    ),
-                  ],
-                ),
-                const SizedBox(height: 16),
-                const Text(
-                  'Fee Payment Status',
-                  style: TextStyle(
-                    fontSize: 14,
-                    fontWeight: FontWeight.bold,
-                    color: AppColors.primaryNavy,
+                      const SizedBox(height: 16),
+                      const Text(
+                        'Fee Payment Status',
+                        style: TextStyle(
+                          fontSize: 14,
+                          fontWeight: FontWeight.bold,
+                          color: AppColors.primaryNavy,
+                        ),
+                      ),
+                      const SizedBox(height: 10),
+                      FutureBuilder<List<Fee>>(
+                        future: feesFuture,
+                        builder: (context, snapshot) {
+                          if (snapshot.connectionState ==
+                              ConnectionState.waiting) {
+                            return Container(
+                              height: 100,
+                              alignment: Alignment.center,
+                              child: const CircularProgressIndicator(
+                                strokeWidth: 2.5,
+                                valueColor: AlwaysStoppedAnimation<Color>(
+                                  AppColors.primaryBlue,
+                                ),
+                              ),
+                            );
+                          }
+
+                          if (snapshot.hasError) {
+                            return Container(
+                              width: double.infinity,
+                              padding: const EdgeInsets.all(16),
+                              decoration: BoxDecoration(
+                                color: AppColors.surfaceWhite,
+                                borderRadius: BorderRadius.circular(16),
+                                border: Border.all(
+                                  color: AppColors.error.withValues(alpha: 0.3),
+                                ),
+                              ),
+                              child: Column(
+                                mainAxisSize: MainAxisSize.min,
+                                children: [
+                                  const Text(
+                                    'Failed to load fee payments. Please try again.',
+                                    textAlign: TextAlign.center,
+                                    style: TextStyle(color: AppColors.error),
+                                  ),
+                                  const SizedBox(height: 12),
+                                  OutlinedButton(
+                                    onPressed: () {
+                                      setModalState(() {
+                                        feesFuture = _driverApiService
+                                            .getStudentFees(student.id);
+                                      });
+                                    },
+                                    child: const Text('Retry'),
+                                  ),
+                                ],
+                              ),
+                            );
+                          }
+
+                          final fees = snapshot.data ?? [];
+                          final payments =
+                              fees.map(PaymentRecord.fromFee).toList();
+
+                          if (payments.isEmpty) {
+                            return const Padding(
+                              padding: EdgeInsets.symmetric(vertical: 12.0),
+                              child: Text(
+                                'No payment record found for this student.',
+                                style:
+                                    TextStyle(color: AppColors.textSecondary),
+                              ),
+                            );
+                          }
+
+                          return Column(
+                            mainAxisSize: MainAxisSize.min,
+                            children: payments
+                                .map((p) => _buildPaymentRow(p))
+                                .toList(),
+                          );
+                        },
+                      ),
+                    ],
                   ),
                 ),
-                const SizedBox(height: 10),
-                if (payments.isEmpty)
-                  const Padding(
-                    padding: EdgeInsets.symmetric(vertical: 12.0),
-                    child: Text(
-                      'No payment record found for this student.',
-                      style: TextStyle(color: AppColors.textSecondary),
-                    ),
-                  )
-                else
-                  ...payments.map((p) => _buildPaymentRow(p)),
-              ],
-            ),
-          ),
+              ),
+            );
+          },
         );
       },
     );

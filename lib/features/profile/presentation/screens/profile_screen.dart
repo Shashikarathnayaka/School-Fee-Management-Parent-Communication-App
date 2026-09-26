@@ -7,17 +7,43 @@ import '../../../../core/constants/app_strings.dart';
 import '../../../../core/models/user_role.dart';
 import '../../../../core/services/active_role_notifier.dart';
 import '../../../../core/services/auth_service.dart';
+import '../../../../core/services/student_list_notifier.dart';
 import '../../../home/presentation/widgets/app_bottom_nav_bar.dart';
 
-class ProfileScreen extends StatelessWidget {
+class ProfileScreen extends StatefulWidget {
   final AuthService authService;
   final ActiveRoleNotifier activeRoleNotifier;
+  final StudentListNotifier? studentListNotifier;
 
   const ProfileScreen({
     super.key,
     required this.authService,
     required this.activeRoleNotifier,
+    this.studentListNotifier,
   });
+
+  @override
+  State<ProfileScreen> createState() => _ProfileScreenState();
+}
+
+class _ProfileScreenState extends State<ProfileScreen> {
+  @override
+  void initState() {
+    super.initState();
+    widget.studentListNotifier?.addListener(_onStudentListChanged);
+  }
+
+  @override
+  void dispose() {
+    widget.studentListNotifier?.removeListener(_onStudentListChanged);
+    super.dispose();
+  }
+
+  void _onStudentListChanged() {
+    if (mounted) {
+      setState(() {});
+    }
+  }
 
   void _onBottomNavTapped(BuildContext context, int index, bool isDriver) {
     if (isDriver) {
@@ -59,16 +85,26 @@ class ProfileScreen extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
-    final user = authService.currentUser;
+    final user = widget.authService.currentUser;
     
     // We use the active role to decide which UI mode we are currently rendering.
-    final activeRole = activeRoleNotifier.value;
+    final activeRole = widget.activeRoleNotifier.value;
     final isDriverMode = activeRole == UserRole.driver;
     final hasDualRole = user?.hasDualRole ?? false;
 
     final userName = user?.name ?? (isDriverMode ? 'Kamal Silva' : 'Shashi Karathnayaka');
     final userEmail = user?.email ?? (isDriverMode ? 'driver@test.com' : 'parent@test.com');
     final roleLabel = isDriverMode ? 'School Van Driver' : 'Parent / Guardian';
+
+    final studentCount = widget.studentListNotifier?.students.length ?? 0;
+    final String studentCountText;
+    if (studentCount == 0) {
+      studentCountText = 'No registered children';
+    } else if (studentCount == 1) {
+      studentCountText = '1 registered child';
+    } else {
+      studentCountText = '$studentCount registered children';
+    }
 
     return Scaffold(
       backgroundColor: AppColors.backgroundLight,
@@ -114,7 +150,7 @@ class ProfileScreen extends StatelessWidget {
                   onSelectionChanged: (Set<UserRole> newSelection) {
                     final selected = newSelection.first;
                     if (selected != activeRole) {
-                      activeRoleNotifier.value = selected;
+                      widget.activeRoleNotifier.value = selected;
                       context.go(AppRoutes.home);
                     }
                   },
@@ -208,7 +244,7 @@ class ProfileScreen extends StatelessWidget {
                         leading: const Icon(Icons.child_care_rounded,
                             color: AppColors.primaryBlue),
                         title: const Text('Managed Students'),
-                        subtitle: const Text('2 registered children'), // TODO: wire up dynamic student count
+                        subtitle: Text(studentCountText),
                         trailing: const Icon(Icons.chevron_right_rounded,
                             color: AppColors.textMuted),
                         onTap: () => context.go(AppRoutes.manageStudents),
@@ -253,7 +289,7 @@ class ProfileScreen extends StatelessWidget {
                 height: 52,
                 child: OutlinedButton.icon(
                   onPressed: () async {
-                    await authService.logout();
+                    await widget.authService.logout();
                     if (context.mounted) {
                       context.go(AppRoutes.login);
                     }

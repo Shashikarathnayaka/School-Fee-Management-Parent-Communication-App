@@ -30,4 +30,5 @@ class ApiConfig {
   static const String driverPickup = '$baseUrl/driver/pickup';
   static const String driverHistory = '$baseUrl/driver/history';
   static const String driverNotifications = '$baseUrl/driver/notifications';
+  static const String driverStudents = '$baseUrl/driver/students';
 }

@@ -49,7 +49,7 @@ class MockDriverApiService extends DriverApiService {
 
 class FakeApiClient implements ApiClient {
   @override
-  dynamic noSuchMethod(Invocation invocation) => null;
+  dynamic noSuchMethod(Invocation invocation) => Future.value(null);
 }
 
 void main() {

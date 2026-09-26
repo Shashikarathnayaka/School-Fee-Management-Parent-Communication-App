@@ -2,11 +2,60 @@ import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:nd_smart_schoolpay/app/app.dart';
 import 'package:nd_smart_schoolpay/core/constants/app_strings.dart';
+import 'package:nd_smart_schoolpay/core/models/driver_profile.dart';
+import 'package:nd_smart_schoolpay/core/models/driver_route.dart';
+import 'package:nd_smart_schoolpay/core/models/fee.dart';
+import 'package:nd_smart_schoolpay/core/models/notification_model.dart';
+import 'package:nd_smart_schoolpay/core/models/parent_profile.dart';
+import 'package:nd_smart_schoolpay/core/models/student.dart';
+import 'package:nd_smart_schoolpay/core/network/api_client.dart';
 import 'package:nd_smart_schoolpay/core/services/active_role_notifier.dart';
 import 'package:nd_smart_schoolpay/core/services/auth_service.dart';
+import 'package:nd_smart_schoolpay/core/services/driver_api_service.dart';
 import 'package:nd_smart_schoolpay/core/services/parent_api_service.dart';
 import 'package:nd_smart_schoolpay/core/services/student_list_notifier.dart';
-import 'package:nd_smart_schoolpay/features/home/data/mock_home_data.dart';
+
+class FakeApiClient implements ApiClient {
+  @override
+  dynamic noSuchMethod(Invocation invocation) => Future.value(null);
+}
+
+class MockParentApiService extends ParentApiService {
+  final List<Fee> mockFees;
+  MockParentApiService({this.mockFees = const []}) : super(FakeApiClient());
+
+  @override
+  Future<List<Fee>> getFees() async => mockFees;
+
+  @override
+  Future<ParentProfile?> getProfile() async => ParentProfile(
+        id: 'usr_parent_01',
+        name: 'Shashi Karathnayaka',
+        email: 'parent@test.com',
+        phone: '0712345678',
+        hasDriverProfile: false,
+      );
+
+  @override
+  Future<List<AppNotification>> getNotifications() async => [];
+}
+
+class MockDriverApiService extends DriverApiService {
+  MockDriverApiService() : super(FakeApiClient());
+
+  @override
+  Future<DriverProfile?> getProfile() async => DriverProfile(
+        id: 'driver_01',
+        name: 'Kamal Silva',
+        phone: '0771234567',
+        vanNumber: 'WP NA-1234',
+        licenseNo: 'B1234567',
+        isOnDuty: true,
+      );
+
+  @override
+  Future<List<DriverRoute>> getTodayRoutes() async => [];
+}
 
 void main() {
   group('N&D Smart SchoolPay Role-Based App Flow Tests', () {
@@ -14,17 +63,45 @@ void main() {
     late ActiveRoleNotifier activeRoleNotifier;
     late StudentListNotifier studentListNotifier;
     late ParentApiService parentApiService;
+    late DriverApiService driverApiService;
 
     setUp(() {
       mockAuthService = MockAuthService();
       activeRoleNotifier = ActiveRoleNotifier();
-      parentApiService = ParentApiService();
+      final mockFee = Fee(
+        id: 'fee_01',
+        studentId: 'st_01',
+        studentName: 'Kaveesha Rathnayaka',
+        amount: 15000,
+        status: 'DUE',
+        dueDate: DateTime.now().add(const Duration(days: 5)),
+        description: 'School Fee',
+      );
+      parentApiService = MockParentApiService(mockFees: [mockFee]);
+      driverApiService = MockDriverApiService();
       // Pre-seed with mock students so the Parent Dashboard test can verify
       // the student card renders — in tests there's no real API, so we
       // simulate the same state the app would have for a logged-in parent.
       studentListNotifier = StudentListNotifier(
         parentApiService,
-        initialStudents: MockHomeData.students,
+        initialStudents: [
+          Student(
+            id: 'st_01',
+            name: 'Kaveesha Rathnayaka',
+            grade: '08',
+            section: 'A',
+            schoolName: 'N&D International School',
+            studentCode: 'STU-KAV01',
+          ),
+          Student(
+            id: 'st_02',
+            name: 'Shashika Rathnayaka',
+            grade: '05',
+            section: 'B',
+            schoolName: 'N&D International School',
+            studentCode: 'STU-SHA02',
+          ),
+        ],
       );
     });
 
@@ -34,6 +111,7 @@ void main() {
         activeRoleNotifier: activeRoleNotifier,
         studentListNotifier: studentListNotifier,
         parentApiService: parentApiService,
+        driverApiService: driverApiService,
       ));
 
       // Verify Splash branding title and tagline are present
@@ -55,6 +133,7 @@ void main() {
         activeRoleNotifier: activeRoleNotifier,
         studentListNotifier: studentListNotifier,
         parentApiService: parentApiService,
+        driverApiService: driverApiService,
       ));
 
       // Skip splash
@@ -88,6 +167,7 @@ void main() {
         activeRoleNotifier: activeRoleNotifier,
         studentListNotifier: studentListNotifier,
         parentApiService: parentApiService,
+        driverApiService: driverApiService,
       ));
 
       // Skip splash transition
@@ -120,6 +200,7 @@ void main() {
         activeRoleNotifier: activeRoleNotifier,
         studentListNotifier: studentListNotifier,
         parentApiService: parentApiService,
+        driverApiService: driverApiService,
       ));
 
       // Skip splash transition
@@ -158,6 +239,7 @@ void main() {
         activeRoleNotifier: activeRoleNotifier,
         studentListNotifier: studentListNotifier,
         parentApiService: parentApiService,
+        driverApiService: driverApiService,
       ));
 
       // Skip splash transition

@@ -1,3 +1,5 @@
+import '../../../../core/models/notification_model.dart';
+
 class NotificationItem {
   final String id;
   final String title;
@@ -29,6 +31,16 @@ class NotificationItem {
     ];
     final m = (dt.month >= 1 && dt.month <= 12) ? months[dt.month - 1] : '';
     return '${dt.day} $m';
+  }
+
+  factory NotificationItem.fromNotification(AppNotification n) {
+    return NotificationItem(
+      id: n.id,
+      title: n.title,
+      message: n.message,
+      time: formatTime(n.createdAt),
+      isRead: n.isRead,
+    );
   }
 
   factory NotificationItem.fromJson(Map<String, dynamic> json) {

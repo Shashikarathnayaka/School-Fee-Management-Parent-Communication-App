@@ -1,6 +1,7 @@
 import '../../features/driver/domain/models/pickup_record.dart';
 import '../models/driver_profile.dart';
 import '../models/driver_route.dart';
+import '../models/fee.dart';
 import '../models/notification_model.dart';
 import '../network/api_client.dart';
 import '../network/api_config.dart';
@@ -142,7 +143,9 @@ class DriverApiService {
   Future<List<PickupRecord>> getHistory({String? date, String? routeId}) async {
     final queryParams = <String, String>{};
     if (date != null && date.isNotEmpty) queryParams['date'] = date;
-    if (routeId != null && routeId.isNotEmpty) queryParams['routeId'] = routeId;
+    if (routeId != null && routeId.isNotEmpty) {
+      queryParams['route_id'] = routeId;
+    }
 
     final url = queryParams.isEmpty
         ? ApiConfig.driverHistory
@@ -154,6 +157,16 @@ class DriverApiService {
     if (response != null && response['history'] is List) {
       return (response['history'] as List)
           .map((e) => PickupRecord.fromJson(Map<String, dynamic>.from(e as Map)))
+          .toList();
+    }
+    return [];
+  }
+
+  Future<List<Fee>> getStudentFees(String studentId) async {
+    final response = await _apiClient.get('${ApiConfig.driverStudents}/$studentId/fees');
+    if (response != null && response['fees'] is List) {
+      return (response['fees'] as List)
+          .map((e) => Fee.fromJson(e))
           .toList();
     }
     return [];

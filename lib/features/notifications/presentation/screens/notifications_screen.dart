@@ -65,18 +65,11 @@ class _NotificationsScreenState extends State<NotificationsScreen> {
     _loadNotifications();
   }
 
-  /// Maps a raw [AppNotification] from the API to a [NotificationItem] for the
-  /// UI, using the shared [NotificationItem.formatTime] helper so the time
-  /// logic is never duplicated.
-  NotificationItem _toNotificationItem(AppNotification n) {
-    return NotificationItem(
-      id: n.id,
-      title: n.title,
-      message: n.message,
-      time: NotificationItem.formatTime(n.createdAt),
-      isRead: n.isRead,
-    );
-  }
+  static NotificationItem toNotificationItem(AppNotification n) =>
+      NotificationItem.fromNotification(n);
+
+  NotificationItem _toNotificationItem(AppNotification n) =>
+      toNotificationItem(n);
 
   Future<void> _loadNotifications({bool isRefresh = false}) async {
     if (!isRefresh) {

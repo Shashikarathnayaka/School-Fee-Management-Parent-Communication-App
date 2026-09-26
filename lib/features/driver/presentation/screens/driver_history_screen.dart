@@ -289,7 +289,29 @@ class _DriverHistoryScreenState extends State<DriverHistoryScreen> {
               parent: BouncingScrollPhysics(),
             ),
             padding: const EdgeInsets.all(20.0),
-            child: _buildBody(),
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                const Text(
+                  'Trip & Pickup History',
+                  style: TextStyle(
+                    fontSize: 18,
+                    fontWeight: FontWeight.bold,
+                    color: AppColors.primaryNavy,
+                  ),
+                ),
+                const SizedBox(height: 6),
+                const Text(
+                  'Review previous student pickups and trip records.',
+                  style: TextStyle(
+                    fontSize: 14,
+                    color: AppColors.textSecondary,
+                  ),
+                ),
+                const SizedBox(height: 20),
+                _buildBody(),
+              ],
+            ),
           ),
         ),
       ),

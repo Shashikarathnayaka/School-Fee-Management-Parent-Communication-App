@@ -117,6 +117,7 @@ abstract class AppRouter {
           builder: (context, state) => ProfileScreen(
             authService: authService,
             activeRoleNotifier: activeRoleNotifier,
+            studentListNotifier: studentListNotifier,
           ),
         ),
         GoRoute(
@@ -164,6 +165,7 @@ abstract class AppRouter {
           builder: (context, state) => DriverHistoryScreen(
             authService: authService,
             activeRoleNotifier: activeRoleNotifier,
+            driverApiService: driverApiService,
           ),
         ),
         GoRoute(
