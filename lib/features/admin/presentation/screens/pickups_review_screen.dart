@@ -14,20 +14,20 @@ import '../../../../core/services/admin_api_service.dart';
 ({String label, Color bg, Color fg}) _statusChip(String status) {
   return switch (status) {
     'PICKED_UP' => (
-        label: 'Picked Up',
-        bg: const Color(0xFFD1FAE5),
-        fg: const Color(0xFF065F46),
-      ),
+      label: 'Picked Up',
+      bg: const Color(0xFFD1FAE5),
+      fg: const Color(0xFF065F46),
+    ),
     'ABSENT' => (
-        label: 'Absent',
-        bg: AppColors.errorLight,
-        fg: AppColors.error,
-      ),
+      label: 'Absent',
+      bg: AppColors.errorLight,
+      fg: AppColors.error,
+    ),
     _ => (
-        label: 'Pending',
-        bg: const Color(0xFFFFF7ED),
-        fg: const Color(0xFF92400E),
-      ),
+      label: 'Pending',
+      bg: const Color(0xFFFFF7ED),
+      fg: const Color(0xFF92400E),
+    ),
   };
 }
 
@@ -73,10 +73,12 @@ class _PickupsReviewScreenState extends State<PickupsReviewScreen> {
       setState(() {
         _routes = raw
             .whereType<Map>()
-            .map((r) => {
-                  'id': (r['id'] ?? '') as String,
-                  'name': (r['name'] ?? 'Route') as String,
-                })
+            .map(
+              (r) => {
+                'id': (r['id'] ?? '') as String,
+                'name': (r['name'] ?? 'Route') as String,
+              },
+            )
             .toList();
       });
     } catch (_) {
@@ -188,24 +190,50 @@ class _PickupsReviewScreenState extends State<PickupsReviewScreen> {
     }
   }
 
+  // ── gate pickup ──
+
+  void _showGatePickup() {
+    showModalBottomSheet(
+      context: context,
+      isScrollControlled: true,
+      backgroundColor: Colors.transparent,
+      builder: (_) => _GatePickupSheet(
+        routes: _routes,
+        adminApiService: widget.adminApiService,
+        onSuccess: _loadData,
+      ),
+    );
+  }
+
   // ── build ──
 
   @override
   Widget build(BuildContext context) {
-    return Column(
-      children: [
-        _FilterBar(
-          selectedDate: _selectedDate,
-          selectedRouteId: _selectedRouteId,
-          routes: _routes,
-          onTapDate: _pickDate,
-          onRouteChanged: (id) {
-            setState(() => _selectedRouteId = id);
-            _loadData();
-          },
-        ),
-        Expanded(child: _buildBody()),
-      ],
+    return Scaffold(
+      backgroundColor: Colors.transparent,
+      floatingActionButton: FloatingActionButton.extended(
+        key: const Key('gate_pickup_fab'),
+        onPressed: _showGatePickup,
+        backgroundColor: AppColors.primaryBlue,
+        foregroundColor: AppColors.surfaceWhite,
+        icon: const Icon(Icons.how_to_reg_rounded),
+        label: const Text('Gate Pickup'),
+      ),
+      body: Column(
+        children: [
+          _FilterBar(
+            selectedDate: _selectedDate,
+            selectedRouteId: _selectedRouteId,
+            routes: _routes,
+            onTapDate: _pickDate,
+            onRouteChanged: (id) {
+              setState(() => _selectedRouteId = id);
+              _loadData();
+            },
+          ),
+          Expanded(child: _buildBody()),
+        ],
+      ),
     );
   }
 
@@ -229,7 +257,7 @@ class _PickupsReviewScreenState extends State<PickupsReviewScreen> {
       onRefresh: _loadData,
       child: ListView.separated(
         key: ValueKey('$_selectedDate|$_selectedRouteId'),
-        padding: const EdgeInsets.fromLTRB(16, 12, 16, 24),
+        padding: const EdgeInsets.fromLTRB(16, 12, 16, 88),
         itemCount: _items.length,
         separatorBuilder: (_, __) => const SizedBox(height: 10),
         itemBuilder: (_, i) => _PickupCard(
@@ -262,9 +290,9 @@ class _FilterBar extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final displayDate = DateFormat('MMM d, yyyy').format(
-      DateTime.tryParse(selectedDate) ?? DateTime.now(),
-    );
+    final displayDate = DateFormat(
+      'MMM d, yyyy',
+    ).format(DateTime.tryParse(selectedDate) ?? DateTime.now());
 
     return Container(
       color: AppColors.surfaceWhite,
@@ -278,8 +306,10 @@ class _FilterBar extends StatelessWidget {
               onTap: onTapDate,
               borderRadius: BorderRadius.circular(10),
               child: Container(
-                padding:
-                    const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
+                padding: const EdgeInsets.symmetric(
+                  horizontal: 12,
+                  vertical: 10,
+                ),
                 decoration: BoxDecoration(
                   color: AppColors.primaryBlueLight,
                   borderRadius: BorderRadius.circular(10),
@@ -383,9 +413,10 @@ class _PickupCard extends StatelessWidget {
         : '—';
     final driver = item.driverName ?? 'Unassigned';
     final route = item.routeName ?? '—';
-    final gradeSection = [item.grade, item.section]
-        .where((s) => s != null && s.isNotEmpty)
-        .join(' - ');
+    final gradeSection = [
+      item.grade,
+      item.section,
+    ].where((s) => s != null && s.isNotEmpty).join(' - ');
 
     return Material(
       color: AppColors.surfaceWhite,
@@ -470,15 +501,9 @@ class _PickupCard extends StatelessWidget {
               const SizedBox(height: 10),
               Row(
                 children: [
-                  _InfoChip(
-                    icon: Icons.alt_route_rounded,
-                    label: route,
-                  ),
+                  _InfoChip(icon: Icons.alt_route_rounded, label: route),
                   const SizedBox(width: 8),
-                  _InfoChip(
-                    icon: Icons.person_rounded,
-                    label: driver,
-                  ),
+                  _InfoChip(icon: Icons.person_rounded, label: driver),
                   const Spacer(),
                   Text(
                     timeStr,
@@ -513,10 +538,7 @@ class _InfoChip extends StatelessWidget {
         const SizedBox(width: 3),
         Text(
           label,
-          style: const TextStyle(
-            fontSize: 12,
-            color: AppColors.textSecondary,
-          ),
+          style: const TextStyle(fontSize: 12, color: AppColors.textSecondary),
           overflow: TextOverflow.ellipsis,
         ),
       ],
@@ -554,19 +576,23 @@ class _MarkPickupSheetState extends State<_MarkPickupSheet> {
     // Check if this is a backward move that may need force=true
     final isBackward =
         (widget.item.status == 'PICKED_UP' || widget.item.status == 'ABSENT') &&
-            _selectedStatus == 'PENDING';
+        _selectedStatus == 'PENDING';
 
     bool force = false;
     if (isBackward) {
       final confirmed = await showDialog<bool>(
         context: context,
         builder: (ctx) => AlertDialog(
-          shape:
-              RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
-          title: const Text('Override Warning',
-              style: TextStyle(
-                  fontWeight: FontWeight.bold,
-                  color: AppColors.primaryNavy)),
+          shape: RoundedRectangleBorder(
+            borderRadius: BorderRadius.circular(16),
+          ),
+          title: const Text(
+            'Override Warning',
+            style: TextStyle(
+              fontWeight: FontWeight.bold,
+              color: AppColors.primaryNavy,
+            ),
+          ),
           content: Text(
             'Moving from ${_statusChip(widget.item.status).label} to '
             '${_statusChip(_selectedStatus!).label} requires '
@@ -582,7 +608,8 @@ class _MarkPickupSheetState extends State<_MarkPickupSheet> {
                 backgroundColor: AppColors.warning,
                 foregroundColor: AppColors.surfaceWhite,
                 shape: RoundedRectangleBorder(
-                    borderRadius: BorderRadius.circular(8)),
+                  borderRadius: BorderRadius.circular(8),
+                ),
               ),
               onPressed: () => Navigator.of(ctx).pop(true),
               child: const Text('Force Override'),
@@ -635,9 +662,9 @@ class _MarkPickupSheetState extends State<_MarkPickupSheet> {
             ),
           ),
           // Header
-          Text(
+          const Text(
             'Set Pickup Status',
-            style: const TextStyle(
+            style: TextStyle(
               fontSize: 18,
               fontWeight: FontWeight.bold,
               color: AppColors.primaryNavy,
@@ -655,8 +682,7 @@ class _MarkPickupSheetState extends State<_MarkPickupSheet> {
               ),
               const SizedBox(width: 8),
               Container(
-                padding:
-                    const EdgeInsets.symmetric(horizontal: 8, vertical: 2),
+                padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 2),
                 decoration: BoxDecoration(
                   color: chip.bg,
                   borderRadius: BorderRadius.circular(12),
@@ -688,8 +714,7 @@ class _MarkPickupSheetState extends State<_MarkPickupSheet> {
                   vertical: 14,
                 ),
                 decoration: BoxDecoration(
-                  color:
-                      isSelected ? optChip.bg : AppColors.backgroundLight,
+                  color: isSelected ? optChip.bg : AppColors.backgroundLight,
                   borderRadius: BorderRadius.circular(12),
                   border: Border.all(
                     color: isSelected ? optChip.fg : AppColors.cardBorder,
@@ -698,11 +723,11 @@ class _MarkPickupSheetState extends State<_MarkPickupSheet> {
                 ),
                 child: Row(
                   children: [
-                    Icon(opt.icon,
-                        color: isSelected
-                            ? optChip.fg
-                            : AppColors.textSecondary,
-                        size: 22),
+                    Icon(
+                      opt.icon,
+                      color: isSelected ? optChip.fg : AppColors.textSecondary,
+                      size: 22,
+                    ),
                     const SizedBox(width: 12),
                     Text(
                       opt.label,
@@ -711,18 +736,22 @@ class _MarkPickupSheetState extends State<_MarkPickupSheet> {
                             ? FontWeight.bold
                             : FontWeight.w500,
                         fontSize: 15,
-                        color: isSelected
-                            ? optChip.fg
-                            : AppColors.textPrimary,
+                        color: isSelected ? optChip.fg : AppColors.textPrimary,
                       ),
                     ),
                     const Spacer(),
                     if (isSelected)
-                      Icon(Icons.radio_button_checked,
-                          color: optChip.fg, size: 20)
+                      Icon(
+                        Icons.radio_button_checked,
+                        color: optChip.fg,
+                        size: 20,
+                      )
                     else
-                      const Icon(Icons.radio_button_unchecked,
-                          color: AppColors.textMuted, size: 20),
+                      const Icon(
+                        Icons.radio_button_unchecked,
+                        color: AppColors.textMuted,
+                        size: 20,
+                      ),
                   ],
                 ),
               ),
@@ -771,6 +800,228 @@ class _MarkPickupSheetState extends State<_MarkPickupSheet> {
 }
 
 // ──────────────────────────────────────────────────────────────────────────────
+// Gate pickup bottom sheet
+// ──────────────────────────────────────────────────────────────────────────────
+
+class _GatePickupSheet extends StatefulWidget {
+  final List<Map<String, String>> routes;
+  final AdminApiService adminApiService;
+  final Future<void> Function() onSuccess;
+
+  const _GatePickupSheet({
+    required this.routes,
+    required this.adminApiService,
+    required this.onSuccess,
+  });
+
+  @override
+  State<_GatePickupSheet> createState() => _GatePickupSheetState();
+}
+
+class _GatePickupSheetState extends State<_GatePickupSheet> {
+  final _codeController = TextEditingController();
+  final _codeFocus = FocusNode();
+  String? _routeId;
+  bool _isLoading = false;
+  bool _isError = false;
+  String? _message;
+
+  @override
+  void dispose() {
+    _codeController.dispose();
+    _codeFocus.dispose();
+    super.dispose();
+  }
+
+  Future<void> _submit() async {
+    final code = _codeController.text.trim().toUpperCase();
+    if (_routeId == null || code.isEmpty) {
+      setState(() {
+        _isError = true;
+        _message = 'Select a route and enter a student code.';
+      });
+      return;
+    }
+
+    setState(() {
+      _isLoading = true;
+      _message = null;
+    });
+
+    try {
+      final item = await widget.adminApiService.ticketPickup(
+        studentCode: code,
+        routeId: _routeId!,
+      );
+      if (!mounted) return;
+      _codeController.clear();
+      setState(() {
+        _isLoading = false;
+        _isError = false;
+        _message = '${item.studentName} picked up.';
+      });
+      _codeFocus.requestFocus();
+      widget.onSuccess();
+    } catch (e) {
+      if (!mounted) return;
+      setState(() {
+        _isLoading = false;
+        _isError = true;
+        _message = formatErrorMessage(e);
+      });
+    }
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      decoration: const BoxDecoration(
+        color: AppColors.surfaceWhite,
+        borderRadius: BorderRadius.vertical(top: Radius.circular(24)),
+      ),
+      padding: EdgeInsets.fromLTRB(
+        20,
+        20,
+        20,
+        20 + MediaQuery.of(context).viewInsets.bottom,
+      ),
+      child: Column(
+        mainAxisSize: MainAxisSize.min,
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Center(
+            child: Container(
+              width: 40,
+              height: 4,
+              margin: const EdgeInsets.only(bottom: 16),
+              decoration: BoxDecoration(
+                color: AppColors.cardBorder,
+                borderRadius: BorderRadius.circular(2),
+              ),
+            ),
+          ),
+          const Text(
+            'Gate Pickup',
+            style: TextStyle(
+              fontSize: 18,
+              fontWeight: FontWeight.bold,
+              color: AppColors.primaryNavy,
+            ),
+          ),
+          const SizedBox(height: 4),
+          const Text(
+            'Enter the student code to mark them as picked up.',
+            style: TextStyle(fontSize: 13, color: AppColors.textSecondary),
+          ),
+          const SizedBox(height: 16),
+          // Route dropdown
+          Container(
+            padding: const EdgeInsets.symmetric(horizontal: 12),
+            decoration: BoxDecoration(
+              color: AppColors.inputFill,
+              borderRadius: BorderRadius.circular(10),
+              border: Border.all(color: AppColors.cardBorder),
+            ),
+            child: DropdownButtonHideUnderline(
+              child: DropdownButton<String>(
+                key: const Key('gate_route_dropdown'),
+                value: _routeId,
+                isExpanded: true,
+                hint: const Text('Select route'),
+                items: widget.routes
+                    .map(
+                      (r) => DropdownMenuItem<String>(
+                        value: r['id'],
+                        child: Text(
+                          r['name'] ?? 'Route',
+                          overflow: TextOverflow.ellipsis,
+                        ),
+                      ),
+                    )
+                    .toList(),
+                onChanged: (v) => setState(() => _routeId = v),
+              ),
+            ),
+          ),
+          const SizedBox(height: 12),
+          // Student code
+          TextField(
+            key: const Key('gate_code_field'),
+            controller: _codeController,
+            focusNode: _codeFocus,
+            textCapitalization: TextCapitalization.characters,
+            textInputAction: TextInputAction.done,
+            onSubmitted: (_) => _submit(),
+            decoration: InputDecoration(
+              hintText: 'Student code (e.g. STU-X8K9Z)',
+              filled: true,
+              fillColor: AppColors.inputFill,
+              border: OutlineInputBorder(
+                borderRadius: BorderRadius.circular(10),
+                borderSide: const BorderSide(color: AppColors.cardBorder),
+              ),
+            ),
+          ),
+          if (_message != null) ...[
+            const SizedBox(height: 12),
+            Container(
+              width: double.infinity,
+              padding: const EdgeInsets.all(12),
+              decoration: BoxDecoration(
+                color: _isError
+                    ? AppColors.errorLight
+                    : const Color(0xFFD1FAE5),
+                borderRadius: BorderRadius.circular(10),
+              ),
+              child: Text(
+                _message!,
+                style: TextStyle(
+                  fontSize: 13,
+                  fontWeight: FontWeight.w600,
+                  color: _isError ? AppColors.error : const Color(0xFF065F46),
+                ),
+              ),
+            ),
+          ],
+          const SizedBox(height: 16),
+          SizedBox(
+            width: double.infinity,
+            child: ElevatedButton(
+              key: const Key('gate_submit_button'),
+              style: ElevatedButton.styleFrom(
+                backgroundColor: AppColors.primaryBlue,
+                foregroundColor: AppColors.surfaceWhite,
+                padding: const EdgeInsets.symmetric(vertical: 14),
+                shape: RoundedRectangleBorder(
+                  borderRadius: BorderRadius.circular(12),
+                ),
+              ),
+              onPressed: _isLoading ? null : _submit,
+              child: _isLoading
+                  ? const SizedBox(
+                      height: 20,
+                      width: 20,
+                      child: CircularProgressIndicator(
+                        color: AppColors.surfaceWhite,
+                        strokeWidth: 2,
+                      ),
+                    )
+                  : const Text(
+                      'Mark Picked Up',
+                      style: TextStyle(
+                        fontSize: 15,
+                        fontWeight: FontWeight.bold,
+                      ),
+                    ),
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+}
+
+// ──────────────────────────────────────────────────────────────────────────────
 // Error state
 // ──────────────────────────────────────────────────────────────────────────────
 
@@ -788,8 +1039,11 @@ class _ErrorState extends StatelessWidget {
         child: Column(
           mainAxisSize: MainAxisSize.min,
           children: [
-            const Icon(Icons.cloud_off_rounded,
-                size: 56, color: AppColors.textMuted),
+            const Icon(
+              Icons.cloud_off_rounded,
+              size: 56,
+              color: AppColors.textMuted,
+            ),
             const SizedBox(height: 16),
             const Text(
               'Something went wrong',
@@ -819,7 +1073,8 @@ class _ErrorState extends StatelessWidget {
                 foregroundColor: AppColors.primaryBlue,
                 side: const BorderSide(color: AppColors.primaryBlue),
                 shape: RoundedRectangleBorder(
-                    borderRadius: BorderRadius.circular(10)),
+                  borderRadius: BorderRadius.circular(10),
+                ),
               ),
             ),
           ],
@@ -840,9 +1095,9 @@ class _EmptyState extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final displayDate = DateFormat('MMM d, yyyy').format(
-      DateTime.tryParse(date) ?? DateTime.now(),
-    );
+    final displayDate = DateFormat(
+      'MMM d, yyyy',
+    ).format(DateTime.tryParse(date) ?? DateTime.now());
     return Center(
       child: Padding(
         padding: const EdgeInsets.all(32),

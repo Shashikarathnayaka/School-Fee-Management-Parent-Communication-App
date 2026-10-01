@@ -36,16 +36,17 @@ class AdminApiService {
 
     final url = params.isEmpty
         ? ApiConfig.adminPickups
-        : Uri.parse(ApiConfig.adminPickups)
-            .replace(queryParameters: params)
-            .toString();
+        : Uri.parse(
+            ApiConfig.adminPickups,
+          ).replace(queryParameters: params).toString();
 
     final response = await _apiClient.get(url);
     if (response != null && response['pickups'] is List) {
       return (response['pickups'] as List)
-          .map((e) => PickupReviewItem.fromJson(
-                Map<String, dynamic>.from(e as Map),
-              ))
+          .map(
+            (e) =>
+                PickupReviewItem.fromJson(Map<String, dynamic>.from(e as Map)),
+          )
           .toList();
     }
     return [];
@@ -66,10 +67,7 @@ class AdminApiService {
     final url = '${ApiConfig.adminPickupsMark}/$id/mark';
     final response = await _apiClient.patch(
       url,
-      body: {
-        'status': status,
-        'force': force,
-      },
+      body: {'status': status, 'force': force},
     );
     if (response != null && response['pickup'] != null) {
       return PickupReviewItem.fromJson(
@@ -78,5 +76,25 @@ class AdminApiService {
     }
     throw Exception('Unexpected response from mark pickup endpoint.');
   }
-}
 
+  /// POST /admin/pickups/ticket
+  ///
+  /// Gate (ticket-based) pickup: marks the student as PICKED_UP on the route.
+  /// Throws on 404 (invalid code / route), 409 (already marked / not on route).
+  Future<PickupReviewItem> ticketPickup({
+    required String studentCode,
+    required String routeId,
+  }) async {
+    final url = '${ApiConfig.adminPickups}/ticket';
+    final response = await _apiClient.post(
+      url,
+      body: {'student_code': studentCode, 'route_id': routeId},
+    );
+    if (response != null && response['pickup'] != null) {
+      return PickupReviewItem.fromJson(
+        Map<String, dynamic>.from(response['pickup'] as Map),
+      );
+    }
+    throw Exception('Unexpected response from ticket pickup endpoint.');
+  }
+}
