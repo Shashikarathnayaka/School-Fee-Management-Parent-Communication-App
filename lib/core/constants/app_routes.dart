@@ -8,6 +8,9 @@ abstract class AppRoutes {
   static const String profile = '/profile';
   static const String receipts = '/receipts';
 
+  // Admin Routes
+  static const String adminHome = '/admin-home';
+
   // Driver Routes
   static const String driverRoute = '/driver-route';
   static const String driverStudents = '/driver-students';
@@ -29,6 +32,9 @@ abstract class AppRoutes {
   static const String notificationsName = 'notifications';
   static const String profileName = 'profile';
   static const String receiptsName = 'receipts';
+
+  // Admin Route Names
+  static const String adminHomeName = 'adminHome';
 
   // Driver Route Names
   static const String driverRouteName = 'driverRoute';

@@ -78,13 +78,17 @@ class ApiAuthService extends AuthService {
         final upper = r.toString().toUpperCase();
         if (upper == 'DRIVER') parsed.add(UserRole.driver);
         if (upper == 'PARENT') parsed.add(UserRole.parent);
+        if (upper == 'ADMIN') parsed.add(UserRole.admin);
       }
       if (parsed.isNotEmpty) return parsed;
     }
     // Fallback to single 'role' string
-    final roleStr = userObj['role'] ?? '';
-    if (roleStr.toString().toUpperCase() == 'DRIVER') {
+    final roleStr = (userObj['role'] ?? '').toString().toUpperCase();
+    if (roleStr == 'DRIVER') {
       return {UserRole.driver};
+    }
+    if (roleStr == 'ADMIN') {
+      return {UserRole.admin};
     }
     return {fallback ?? UserRole.parent};
   }

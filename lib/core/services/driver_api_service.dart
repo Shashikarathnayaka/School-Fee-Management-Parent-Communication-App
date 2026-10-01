@@ -171,4 +171,17 @@ class DriverApiService {
     }
     return [];
   }
+
+  /// Marks a specific fee as paid (cash collected by driver).
+  /// Calls PATCH /driver/students/:studentId/fees/:feeId/pay
+  /// Returns the updated [Fee] on success, rethrows on failure.
+  Future<Fee?> payStudentFee(String studentId, String feeId) async {
+    final response = await _apiClient.patch(
+      '${ApiConfig.driverStudents}/$studentId/fees/$feeId/pay',
+    );
+    if (response != null && response['fee'] != null) {
+      return Fee.fromJson(response['fee']);
+    }
+    return null;
+  }
 }

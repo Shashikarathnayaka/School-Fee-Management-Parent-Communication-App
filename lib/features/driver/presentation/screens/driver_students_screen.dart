@@ -6,6 +6,7 @@ import '../../../../core/constants/app_routes.dart';
 import '../../../../core/models/driver_route.dart';
 import '../../../../core/models/fee.dart';
 import '../../../../core/models/student.dart';
+import '../../../../core/network/api_client.dart';
 import '../../../../core/services/active_role_notifier.dart';
 import '../../../../core/services/auth_service.dart';
 import '../../../../core/services/driver_api_service.dart';
@@ -152,17 +153,123 @@ class _DriverStudentsScreenState extends State<DriverStudentsScreen> {
   }
 
   void _showPaymentStatus(BuildContext context, Student student) {
+    // Mutable local state for the modal — held outside StatefulBuilder so
+    // the FutureBuilder and the pay-action share the same references.
     Future<List<Fee>> feesFuture = _driverApiService.getStudentFees(student.id);
+    // Fees list is extracted from the FutureBuilder result so we can update
+    // individual rows in-place without re-fetching.
+    List<Fee>? fees;
+    // Tracks which feeIds have an in-flight PATCH request.
+    final Set<String> loadingFeeIds = {};
 
     showModalBottomSheet(
       context: context,
       backgroundColor: AppColors.surfaceWhite,
+      isScrollControlled: true,
       shape: const RoundedRectangleBorder(
         borderRadius: BorderRadius.vertical(top: Radius.circular(20)),
       ),
-      builder: (context) {
+      builder: (modalContext) {
         return StatefulBuilder(
-          builder: (context, setModalState) {
+          builder: (modalContext, setModalState) {
+            // ----------------------------------------------------------------
+            // Confirmation + API call for marking a fee as paid.
+            // ----------------------------------------------------------------
+            Future<void> confirmAndPayFee(Fee fee) async {
+              final confirmed = await showDialog<bool>(
+                context: modalContext,
+                builder: (dialogContext) => AlertDialog(
+                  shape: RoundedRectangleBorder(
+                    borderRadius: BorderRadius.circular(16),
+                  ),
+                  title: const Text(
+                    'Confirm Cash Collection',
+                    style: TextStyle(
+                      fontWeight: FontWeight.bold,
+                      color: AppColors.primaryNavy,
+                    ),
+                  ),
+                  content: const Text(
+                    'Mark this fee as paid? This confirms cash was collected '
+                    'from the parent.',
+                  ),
+                  actions: [
+                    TextButton(
+                      onPressed: () => Navigator.of(dialogContext).pop(false),
+                      child: const Text('Cancel'),
+                    ),
+                    ElevatedButton(
+                      style: ElevatedButton.styleFrom(
+                        backgroundColor: AppColors.primaryBlue,
+                        foregroundColor: AppColors.surfaceWhite,
+                        shape: RoundedRectangleBorder(
+                          borderRadius: BorderRadius.circular(8),
+                        ),
+                      ),
+                      onPressed: () => Navigator.of(dialogContext).pop(true),
+                      child: const Text('Mark as Paid'),
+                    ),
+                  ],
+                ),
+              );
+
+              if (confirmed != true) return;
+
+              // Show per-row loading indicator.
+              setModalState(() => loadingFeeIds.add(fee.id));
+
+              try {
+                final updated = await _driverApiService.payStudentFee(
+                  student.id,
+                  fee.id,
+                );
+
+                if (!mounted) return;
+
+                // Update the fee in-place in our local list.
+                setModalState(() {
+                  loadingFeeIds.remove(fee.id);
+                  if (updated != null && fees != null) {
+                    final idx = fees!.indexWhere((f) => f.id == fee.id);
+                    if (idx != -1) fees![idx] = updated;
+                  }
+                });
+
+                if (context.mounted) {
+                  ScaffoldMessenger.of(context).showSnackBar(
+                    const SnackBar(
+                      content: Text('Marked as paid'),
+                      behavior: SnackBarBehavior.floating,
+                      backgroundColor: Color(0xFF10B981),
+                    ),
+                  );
+                }
+              } catch (e) {
+                if (!mounted) return;
+                setModalState(() => loadingFeeIds.remove(fee.id));
+
+                if (context.mounted) {
+                  ScaffoldMessenger.of(context).showSnackBar(
+                    SnackBar(
+                      content: Text(
+                        'Failed to mark as paid: ${formatErrorMessage(e)}',
+                      ),
+                      behavior: SnackBarBehavior.floating,
+                      backgroundColor: AppColors.error,
+                      action: SnackBarAction(
+                        label: 'Retry',
+                        textColor: AppColors.surfaceWhite,
+                        onPressed: () => confirmAndPayFee(fee),
+                      ),
+                    ),
+                  );
+                }
+              }
+            }
+
+            // ----------------------------------------------------------------
+            // Modal UI
+            // ----------------------------------------------------------------
             return SafeArea(
               child: SingleChildScrollView(
                 child: Padding(
@@ -258,6 +365,7 @@ class _DriverStudentsScreenState extends State<DriverStudentsScreen> {
                                   OutlinedButton(
                                     onPressed: () {
                                       setModalState(() {
+                                        fees = null;
                                         feesFuture = _driverApiService
                                             .getStudentFees(student.id);
                                       });
@@ -269,11 +377,10 @@ class _DriverStudentsScreenState extends State<DriverStudentsScreen> {
                             );
                           }
 
-                          final fees = snapshot.data ?? [];
-                          final payments =
-                              fees.map(PaymentRecord.fromFee).toList();
+                          // Seed the mutable list on first load only.
+                          fees ??= List<Fee>.from(snapshot.data ?? []);
 
-                          if (payments.isEmpty) {
+                          if (fees!.isEmpty) {
                             return const Padding(
                               padding: EdgeInsets.symmetric(vertical: 12.0),
                               child: Text(
@@ -286,8 +393,20 @@ class _DriverStudentsScreenState extends State<DriverStudentsScreen> {
 
                           return Column(
                             mainAxisSize: MainAxisSize.min,
-                            children: payments
-                                .map((p) => _buildPaymentRow(p))
+                            children: fees!
+                                .map(
+                                  (fee) => _buildPaymentRow(
+                                    PaymentRecord.fromFee(fee),
+                                    isLoading:
+                                        loadingFeeIds.contains(fee.id),
+                                    onMarkPaid: fee.status
+                                                .trim()
+                                                .toUpperCase() ==
+                                            'PAID'
+                                        ? null
+                                        : () => confirmAndPayFee(fee),
+                                  ),
+                                )
                                 .toList(),
                           );
                         },
@@ -303,7 +422,11 @@ class _DriverStudentsScreenState extends State<DriverStudentsScreen> {
     );
   }
 
-  Widget _buildPaymentRow(PaymentRecord p) {
+  Widget _buildPaymentRow(
+    PaymentRecord p, {
+    bool isLoading = false,
+    VoidCallback? onMarkPaid,
+  }) {
     final isPaid = p.status == FeeStatus.paid;
     final color = isPaid ? const Color(0xFF10B981) : const Color(0xFFEF4444);
     final label = isPaid ? 'Paid' : 'Not Paid';
@@ -346,14 +469,42 @@ class _DriverStudentsScreenState extends State<DriverStudentsScreen> {
               ],
             ),
           ),
-          Text(
-            label,
-            style: TextStyle(
-              color: color,
-              fontWeight: FontWeight.bold,
-              fontSize: 12,
+          // --- Status label / Mark as Paid button ---
+          if (isLoading)
+            const SizedBox(
+              width: 20,
+              height: 20,
+              child: CircularProgressIndicator(
+                strokeWidth: 2,
+                valueColor: AlwaysStoppedAnimation<Color>(
+                  AppColors.primaryBlue,
+                ),
+              ),
+            )
+          else if (onMarkPaid != null)
+            TextButton(
+              style: TextButton.styleFrom(
+                padding:
+                    const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+                minimumSize: Size.zero,
+                tapTargetSize: MaterialTapTargetSize.shrinkWrap,
+                foregroundColor: AppColors.primaryBlue,
+              ),
+              onPressed: onMarkPaid,
+              child: const Text(
+                'Mark as Paid',
+                style: TextStyle(fontSize: 12, fontWeight: FontWeight.bold),
+              ),
+            )
+          else
+            Text(
+              label,
+              style: TextStyle(
+                color: color,
+                fontWeight: FontWeight.bold,
+                fontSize: 12,
+              ),
             ),
-          ),
         ],
       ),
     );

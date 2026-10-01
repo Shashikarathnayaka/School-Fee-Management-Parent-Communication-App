@@ -2,9 +2,11 @@ import 'package:go_router/go_router.dart';
 
 import '../../core/constants/app_routes.dart';
 import '../../core/services/active_role_notifier.dart';
+import '../../core/services/admin_api_service.dart';
 import '../../core/services/auth_service.dart';
 import '../../core/services/parent_api_service.dart';
 import '../../core/services/student_list_notifier.dart';
+import '../../features/admin/presentation/screens/admin_home_screen.dart';
 import '../../features/auth/presentation/screens/driver_upgrade_screen.dart';
 import '../../features/auth/presentation/screens/login_screen.dart';
 import '../../features/auth/presentation/screens/registration_screen.dart';
@@ -30,6 +32,7 @@ abstract class AppRouter {
     StudentListNotifier studentListNotifier,
     ParentApiService parentApiService, {
     DriverApiService? driverApiService,
+    AdminApiService? adminApiService,
   }) {
     return GoRouter(
       initialLocation: AppRoutes.splash,
@@ -46,10 +49,24 @@ abstract class AppRouter {
           return isAuthRoute ? null : AppRoutes.login;
         }
 
+        final user = authService.currentUser;
+
+        // Admin routing & guards
+        if (user != null && user.isAdmin) {
+          if (state.matchedLocation != AppRoutes.adminHome) {
+            return AppRoutes.adminHome;
+          }
+          return null;
+        }
+
+        // Guard: prevent non-admins from landing on admin routes
+        if (state.matchedLocation == AppRoutes.adminHome) {
+          return AppRoutes.home;
+        }
+
         if (isAuthenticated &&
             (state.matchedLocation == AppRoutes.login ||
                 state.matchedLocation == AppRoutes.splash)) {
-          final user = authService.currentUser;
           if (user != null) {
             activeRoleNotifier.value = user.role;
           }
@@ -80,6 +97,14 @@ abstract class AppRouter {
           name: AppRoutes.registerName,
           builder: (context, state) =>
               RegistrationScreen(authService: authService),
+        ),
+        GoRoute(
+          path: AppRoutes.adminHome,
+          name: AppRoutes.adminHomeName,
+          builder: (context, state) => AdminHomeScreen(
+            authService: authService,
+            adminApiService: adminApiService,
+          ),
         ),
         GoRoute(
           path: AppRoutes.home,

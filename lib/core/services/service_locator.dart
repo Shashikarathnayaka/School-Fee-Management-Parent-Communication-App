@@ -1,6 +1,7 @@
 import 'package:shared_preferences/shared_preferences.dart';
 import '../network/api_client.dart';
 import 'active_role_notifier.dart';
+import 'admin_api_service.dart';
 import 'api_auth_service.dart';
 import 'auth_service.dart';
 import 'driver_api_service.dart';
@@ -17,6 +18,7 @@ class ServiceLocator {
   late AuthService authService;
   late ParentApiService parentApiService;
   late DriverApiService driverApiService;
+  late AdminApiService adminApiService;
   late ActiveRoleNotifier activeRoleNotifier;
   late StudentListNotifier studentListNotifier;
 
@@ -25,6 +27,7 @@ class ServiceLocator {
     apiClient = ApiClient(prefs);
     parentApiService = ParentApiService(apiClient);
     driverApiService = DriverApiService(apiClient);
+    adminApiService = AdminApiService(apiClient);
     activeRoleNotifier = ActiveRoleNotifier();
     studentListNotifier = StudentListNotifier(parentApiService);
     authService = ApiAuthService(

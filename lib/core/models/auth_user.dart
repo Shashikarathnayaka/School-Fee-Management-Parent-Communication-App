@@ -16,6 +16,7 @@ class AuthUser {
 
   bool get isParent => roles.contains(UserRole.parent);
   bool get isDriver => roles.contains(UserRole.driver);
+  bool get isAdmin => roles.contains(UserRole.admin);
   bool get hasDualRole => isParent && isDriver;
 
   /// Backward-compat getter — returns the "primary" role.
@@ -41,6 +42,8 @@ class AuthUser {
           parsedRoles.add(UserRole.driver);
         } else if (str == 'parent') {
           parsedRoles.add(UserRole.parent);
+        } else if (str == 'admin') {
+          parsedRoles.add(UserRole.admin);
         }
       }
     }
@@ -51,6 +54,8 @@ class AuthUser {
         parsedRoles.add(UserRole.driver);
       } else if (str == 'parent') {
         parsedRoles.add(UserRole.parent);
+      } else if (str == 'admin') {
+        parsedRoles.add(UserRole.admin);
       }
     }
 
