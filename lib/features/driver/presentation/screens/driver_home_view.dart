@@ -9,6 +9,7 @@ import '../../../../core/models/driver_route.dart';
 import '../../../../core/models/notification_model.dart';
 import '../../../../core/models/student.dart';
 import '../../../../core/models/user_role.dart';
+import '../../../../core/network/api_client.dart';
 import '../../../../core/services/auth_service.dart';
 import '../../../../core/services/driver_api_service.dart';
 import '../../../../core/services/service_locator.dart';
@@ -32,8 +33,8 @@ class DriverHomeView extends StatefulWidget {
 }
 
 class _DriverHomeViewState extends State<DriverHomeView> {
-  late final DriverApiService _driverApiService = widget.driverApiService ??
-      ServiceLocator.instance.driverApiService;
+  late final DriverApiService _driverApiService =
+      widget.driverApiService ?? ServiceLocator.instance.driverApiService;
 
   // ── Profile / duty status ────────────────────────────────────────────────
   DriverProfile? _profile;
@@ -148,9 +149,66 @@ class _DriverHomeViewState extends State<DriverHomeView> {
           content: const Text("Couldn't update duty status. Please try again."),
           backgroundColor: AppColors.error,
           behavior: SnackBarBehavior.floating,
-          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
+          shape: RoundedRectangleBorder(
+            borderRadius: BorderRadius.circular(10),
+          ),
         ),
       );
+    }
+  }
+  // ── Pickup actions ───────────────────────────────────────────────────────
+
+  /// Student id currently being updated (disables that row's buttons).
+  String? _updatingStudentId;
+
+  String? _routeIdForStudent(String studentId) {
+    for (final route in _todayRoutes) {
+      for (final s in route.students ?? <Student>[]) {
+        if (s.id == studentId) return route.id;
+      }
+    }
+    return null;
+  }
+
+  void _showSnack(String message, {bool isError = false}) {
+    if (!mounted) return;
+    ScaffoldMessenger.of(context).hideCurrentSnackBar();
+    ScaffoldMessenger.of(context).showSnackBar(
+      SnackBar(
+        content: Text(message),
+        backgroundColor: isError ? AppColors.error : AppColors.success,
+        behavior: SnackBarBehavior.floating,
+        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
+      ),
+    );
+  }
+
+  Future<void> _handlePickup(Student student, String status) async {
+    if (_updatingStudentId != null) return;
+
+    final routeId = _routeIdForStudent(student.id);
+    if (routeId == null) {
+      _showSnack('Could not find this student\'s route.', isError: true);
+      return;
+    }
+
+    setState(() => _updatingStudentId = student.id);
+    try {
+      await _driverApiService.updatePickupStatus(
+        studentId: student.id,
+        status: status,
+        routeId: routeId,
+      );
+      await _loadTodayRoutes();
+      _showSnack(
+        status == 'PICKED_UP'
+            ? '${student.name} marked as picked up.'
+            : '${student.name} marked as absent.',
+      );
+    } catch (e) {
+      _showSnack(formatErrorMessage(e), isError: true);
+    } finally {
+      if (mounted) setState(() => _updatingStudentId = null);
     }
   }
 
@@ -213,9 +271,8 @@ class _DriverHomeViewState extends State<DriverHomeView> {
     final theme = Theme.of(context);
 
     // Driver name: prefer profile from API, fall back to the cached auth user.
-    final driverName = _profile?.name ??
-        widget.authService.currentUser?.name ??
-        'Driver';
+    final driverName =
+        _profile?.name ?? widget.authService.currentUser?.name ?? 'Driver';
 
     return Scaffold(
       backgroundColor: AppColors.backgroundLight,
@@ -414,7 +471,9 @@ class _DriverHomeViewState extends State<DriverHomeView> {
                         style: TextStyle(
                           fontSize: 16,
                           fontWeight: FontWeight.bold,
-                          color: _isOnDuty ? AppColors.success : AppColors.error,
+                          color: _isOnDuty
+                              ? AppColors.success
+                              : AppColors.error,
                         ),
                       ),
               ],
@@ -434,7 +493,9 @@ class _DriverHomeViewState extends State<DriverHomeView> {
                   onTap: _isLoadingProfile ? null : _handleDutyToggle,
                   child: Container(
                     padding: const EdgeInsets.symmetric(
-                        horizontal: 14, vertical: 8),
+                      horizontal: 14,
+                      vertical: 8,
+                    ),
                     decoration: BoxDecoration(
                       border: Border.all(
                         color: _isOnDuty
@@ -494,16 +555,16 @@ class _DriverHomeViewState extends State<DriverHomeView> {
         ),
         child: const Row(
           children: [
-            Icon(Icons.people_outline_rounded,
-                size: 20, color: AppColors.textSecondary),
+            Icon(
+              Icons.people_outline_rounded,
+              size: 20,
+              color: AppColors.textSecondary,
+            ),
             SizedBox(width: 8),
             Expanded(
               child: Text(
                 'No students assigned to today\'s route.',
-                style: TextStyle(
-                  fontSize: 13,
-                  color: AppColors.textSecondary,
-                ),
+                style: TextStyle(fontSize: 13, color: AppColors.textSecondary),
               ),
             ),
           ],
@@ -529,6 +590,10 @@ class _DriverHomeViewState extends State<DriverHomeView> {
         ? (_todayRoutes.first.startTime ?? '--:--')
         : '--:--';
 
+    final isUpdating = _updatingStudentId == student.id;
+    final isPickedUp = status == PickupStatus.pickedUp;
+    final isAbsent = status == PickupStatus.absent;
+
     return Container(
       padding: const EdgeInsets.all(14),
       decoration: BoxDecoration(
@@ -536,58 +601,119 @@ class _DriverHomeViewState extends State<DriverHomeView> {
         borderRadius: BorderRadius.circular(14),
         border: Border.all(color: AppColors.cardBorder),
       ),
-      child: Row(
+      child: Column(
         children: [
-          Container(
-            padding:
-                const EdgeInsets.symmetric(horizontal: 10, vertical: 8),
-            decoration: BoxDecoration(
-              color: AppColors.primaryBlueLight,
-              borderRadius: BorderRadius.circular(8),
-            ),
-            child: Text(
-              timeHint,
-              style: const TextStyle(
-                fontSize: 12,
-                fontWeight: FontWeight.bold,
-                color: AppColors.primaryBlue,
-              ),
-            ),
-          ),
-          const SizedBox(width: 14),
-          Expanded(
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                Text(
-                  student.name,
-                  style: const TextStyle(
-                    fontWeight: FontWeight.bold,
-                    fontSize: 14,
-                    color: AppColors.primaryNavy,
-                  ),
-                ),
-                const SizedBox(height: 2),
-                Text(
-                  '${student.displayGrade} • ${student.pickupLocation ?? 'Pickup point not set'}',
-                  style: const TextStyle(
-                    fontSize: 12,
-                    color: AppColors.textSecondary,
-                  ),
-                ),
-              ],
-            ),
-          ),
           Row(
             children: [
-              Icon(status.icon, color: status.color, size: 16),
-              const SizedBox(width: 4),
-              Text(
-                status.label,
-                style: TextStyle(
-                  color: status.color,
-                  fontWeight: FontWeight.bold,
-                  fontSize: 12,
+              Container(
+                padding: const EdgeInsets.symmetric(
+                  horizontal: 10,
+                  vertical: 8,
+                ),
+                decoration: BoxDecoration(
+                  color: AppColors.primaryBlueLight,
+                  borderRadius: BorderRadius.circular(8),
+                ),
+                child: Text(
+                  timeHint,
+                  style: const TextStyle(
+                    fontSize: 12,
+                    fontWeight: FontWeight.bold,
+                    color: AppColors.primaryBlue,
+                  ),
+                ),
+              ),
+              const SizedBox(width: 14),
+              Expanded(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Text(
+                      student.name,
+                      style: const TextStyle(
+                        fontWeight: FontWeight.bold,
+                        fontSize: 14,
+                        color: AppColors.primaryNavy,
+                      ),
+                    ),
+                    const SizedBox(height: 2),
+                    Text(
+                      '${student.displayGrade} • ${student.pickupLocation ?? 'Pickup point not set'}',
+                      style: const TextStyle(
+                        fontSize: 12,
+                        color: AppColors.textSecondary,
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+              Row(
+                children: [
+                  Icon(status.icon, color: status.color, size: 16),
+                  const SizedBox(width: 4),
+                  Text(
+                    status.label,
+                    style: TextStyle(
+                      color: status.color,
+                      fontWeight: FontWeight.bold,
+                      fontSize: 12,
+                    ),
+                  ),
+                ],
+              ),
+            ],
+          ),
+          const SizedBox(height: 12),
+          Row(
+            children: [
+              Expanded(
+                child: ElevatedButton.icon(
+                  key: Key('pickup_btn_${student.id}'),
+                  onPressed: (isUpdating || isPickedUp)
+                      ? null
+                      : () => _handlePickup(student, 'PICKED_UP'),
+                  icon: isUpdating
+                      ? const SizedBox(
+                          width: 14,
+                          height: 14,
+                          child: CircularProgressIndicator(
+                            strokeWidth: 2,
+                            color: AppColors.surfaceWhite,
+                          ),
+                        )
+                      : const Icon(Icons.check_circle_rounded, size: 16),
+                  label: const Text('Picked Up'),
+                  style: ElevatedButton.styleFrom(
+                    backgroundColor: AppColors.success,
+                    foregroundColor: AppColors.surfaceWhite,
+                    padding: const EdgeInsets.symmetric(vertical: 10),
+                    shape: RoundedRectangleBorder(
+                      borderRadius: BorderRadius.circular(10),
+                    ),
+                  ),
+                ),
+              ),
+              const SizedBox(width: 10),
+              Expanded(
+                child: OutlinedButton.icon(
+                  key: Key('absent_btn_${student.id}'),
+                  onPressed: (isUpdating || isAbsent)
+                      ? null
+                      : () => _handlePickup(student, 'ABSENT'),
+                  icon: const Icon(Icons.cancel_rounded, size: 16),
+                  label: const Text('Absent'),
+                  style: OutlinedButton.styleFrom(
+                    foregroundColor: AppColors.error,
+                    side: BorderSide(
+                      color: (isUpdating || isAbsent)
+                          ? AppColors.cardBorder
+                          : AppColors.error,
+                    ),
+                    padding: const EdgeInsets.symmetric(vertical: 10),
+                    shape: RoundedRectangleBorder(
+                      borderRadius: BorderRadius.circular(10),
+                    ),
+                  ),
                 ),
               ),
             ],
@@ -623,13 +749,14 @@ class _DriverHomeViewState extends State<DriverHomeView> {
     final totalTrips = _todayRoutes.length;
     final totalStudents = students.length;
     final pickedUp = students
-        .where((s) =>
-            s.pickupStatus?.toUpperCase() == 'PICKED_UP')
+        .where((s) => s.pickupStatus?.toUpperCase() == 'PICKED_UP')
         .length;
     final pending = students
-        .where((s) =>
-            s.pickupStatus == null ||
-            s.pickupStatus!.toUpperCase() == 'PENDING')
+        .where(
+          (s) =>
+              s.pickupStatus == null ||
+              s.pickupStatus!.toUpperCase() == 'PENDING',
+        )
         .length;
 
     return Container(
@@ -643,13 +770,25 @@ class _DriverHomeViewState extends State<DriverHomeView> {
         mainAxisAlignment: MainAxisAlignment.spaceAround,
         children: [
           _buildSummaryStat(
-              'Trips', totalTrips.toString(), Icons.directions_bus_rounded),
+            'Trips',
+            totalTrips.toString(),
+            Icons.directions_bus_rounded,
+          ),
           _buildSummaryStat(
-              'Students', totalStudents.toString(), Icons.school_rounded),
+            'Students',
+            totalStudents.toString(),
+            Icons.school_rounded,
+          ),
           _buildSummaryStat(
-              'Picked Up', pickedUp.toString(), Icons.check_circle_rounded),
+            'Picked Up',
+            pickedUp.toString(),
+            Icons.check_circle_rounded,
+          ),
           _buildSummaryStat(
-              'Pending', pending.toString(), Icons.pending_rounded),
+            'Pending',
+            pending.toString(),
+            Icons.pending_rounded,
+          ),
         ],
       ),
     );
@@ -687,15 +826,15 @@ class _DriverHomeViewState extends State<DriverHomeView> {
         ),
         child: const Row(
           children: [
-            Icon(Icons.notifications_none_rounded,
-                color: AppColors.textSecondary, size: 20),
+            Icon(
+              Icons.notifications_none_rounded,
+              color: AppColors.textSecondary,
+              size: 20,
+            ),
             SizedBox(width: 12),
             Text(
               'No notifications yet.',
-              style: TextStyle(
-                fontSize: 13,
-                color: AppColors.textSecondary,
-              ),
+              style: TextStyle(fontSize: 13, color: AppColors.textSecondary),
             ),
           ],
         ),
@@ -780,10 +919,7 @@ class _DriverHomeViewState extends State<DriverHomeView> {
         const SizedBox(height: 2),
         Text(
           label,
-          style: const TextStyle(
-            fontSize: 11,
-            color: AppColors.textSecondary,
-          ),
+          style: const TextStyle(fontSize: 11, color: AppColors.textSecondary),
         ),
       ],
     );
@@ -848,7 +984,11 @@ class _DriverHomeViewState extends State<DriverHomeView> {
             const SizedBox(height: 12),
             const Row(
               children: [
-                Icon(Icons.route_outlined, size: 20, color: AppColors.textSecondary),
+                Icon(
+                  Icons.route_outlined,
+                  size: 20,
+                  color: AppColors.textSecondary,
+                ),
                 SizedBox(width: 8),
                 Expanded(
                   child: Text(
@@ -902,8 +1042,10 @@ class _DriverHomeViewState extends State<DriverHomeView> {
                 ),
               ),
               Container(
-                padding:
-                    const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
+                padding: const EdgeInsets.symmetric(
+                  horizontal: 10,
+                  vertical: 4,
+                ),
                 decoration: BoxDecoration(
                   color: AppColors.primaryBlueLight,
                   borderRadius: BorderRadius.circular(20),
@@ -931,23 +1073,33 @@ class _DriverHomeViewState extends State<DriverHomeView> {
           const SizedBox(height: 12),
           Row(
             children: [
-              const Icon(Icons.access_time_rounded,
-                  size: 16, color: AppColors.textSecondary),
+              const Icon(
+                Icons.access_time_rounded,
+                size: 16,
+                color: AppColors.textSecondary,
+              ),
               const SizedBox(width: 4),
               Text(
                 timeDisplay,
                 style: const TextStyle(
-                    fontSize: 13, color: AppColors.textSecondary),
+                  fontSize: 13,
+                  color: AppColors.textSecondary,
+                ),
               ),
               const SizedBox(width: 16),
-              const Icon(Icons.people_outline_rounded,
-                  size: 16, color: AppColors.textSecondary),
+              const Icon(
+                Icons.people_outline_rounded,
+                size: 16,
+                color: AppColors.textSecondary,
+              ),
               const SizedBox(width: 4),
               Expanded(
                 child: Text(
                   '$studentCount ${studentCount == 1 ? 'Student' : 'Students'}',
                   style: const TextStyle(
-                      fontSize: 13, color: AppColors.textSecondary),
+                    fontSize: 13,
+                    color: AppColors.textSecondary,
+                  ),
                 ),
               ),
               GestureDetector(
@@ -968,8 +1120,10 @@ class _DriverHomeViewState extends State<DriverHomeView> {
             GestureDetector(
               onTap: () => context.go(AppRoutes.driverRoute),
               child: Container(
-                padding:
-                    const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
+                padding: const EdgeInsets.symmetric(
+                  horizontal: 10,
+                  vertical: 6,
+                ),
                 decoration: BoxDecoration(
                   color: AppColors.primaryBlueLight,
                   borderRadius: BorderRadius.circular(8),
@@ -977,8 +1131,11 @@ class _DriverHomeViewState extends State<DriverHomeView> {
                 child: Row(
                   mainAxisSize: MainAxisSize.min,
                   children: [
-                    const Icon(Icons.alt_route_rounded,
-                        size: 14, color: AppColors.primaryBlue),
+                    const Icon(
+                      Icons.alt_route_rounded,
+                      size: 14,
+                      color: AppColors.primaryBlue,
+                    ),
                     const SizedBox(width: 6),
                     Text(
                       '+${_todayRoutes.length - 1} more ${_todayRoutes.length - 1 == 1 ? 'route' : 'routes'} today • View all',
