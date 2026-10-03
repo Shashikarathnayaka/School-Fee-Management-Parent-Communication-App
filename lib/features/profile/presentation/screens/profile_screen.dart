@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:go_router/go_router.dart';
+import 'package:flutter/scheduler.dart';
 
 import '../../../../app/theme/app_colors.dart';
 import '../../../../core/constants/app_routes.dart';
@@ -40,7 +41,15 @@ class _ProfileScreenState extends State<ProfileScreen> {
   }
 
   void _onStudentListChanged() {
-    if (mounted) {
+    if (!mounted) return;
+    // The notifier can fire while the framework is mid-build (for example when
+    // HomeScreen builds ParentHomeView during a role switch). Defer in that case.
+    if (SchedulerBinding.instance.schedulerPhase ==
+        SchedulerPhase.persistentCallbacks) {
+      WidgetsBinding.instance.addPostFrameCallback((_) {
+        if (mounted) setState(() {});
+      });
+    } else {
       setState(() {});
     }
   }
@@ -86,14 +95,16 @@ class _ProfileScreenState extends State<ProfileScreen> {
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
     final user = widget.authService.currentUser;
-    
+
     // We use the active role to decide which UI mode we are currently rendering.
     final activeRole = widget.activeRoleNotifier.value;
     final isDriverMode = activeRole == UserRole.driver;
     final hasDualRole = user?.hasDualRole ?? false;
 
-    final userName = user?.name ?? (isDriverMode ? 'Kamal Silva' : 'Shashi Karathnayaka');
-    final userEmail = user?.email ?? (isDriverMode ? 'driver@test.com' : 'parent@test.com');
+    final userName =
+        user?.name ?? (isDriverMode ? 'Kamal Silva' : 'Shashi Karathnayaka');
+    final userEmail =
+        user?.email ?? (isDriverMode ? 'driver@test.com' : 'parent@test.com');
     final roleLabel = isDriverMode ? 'School Van Driver' : 'Parent / Guardian';
 
     final studentCount = widget.studentListNotifier?.students.length ?? 0;
@@ -130,7 +141,7 @@ class _ProfileScreenState extends State<ProfileScreen> {
           child: Column(
             children: [
               const SizedBox(height: 12),
-              
+
               if (hasDualRole) ...[
                 // Segmented control for role switching
                 SegmentedButton<UserRole>(
@@ -155,16 +166,16 @@ class _ProfileScreenState extends State<ProfileScreen> {
                     }
                   },
                   style: ButtonStyle(
-                    backgroundColor: WidgetStateProperty.resolveWith<Color>(
-                      (Set<WidgetState> states) {
-                        if (states.contains(WidgetState.selected)) {
-                          return activeRole == UserRole.driver
-                              ? AppColors.accentTeal.withValues(alpha: 0.2)
-                              : AppColors.primaryBlueLight;
-                        }
-                        return AppColors.surfaceWhite;
-                      },
-                    ),
+                    backgroundColor: WidgetStateProperty.resolveWith<Color>((
+                      Set<WidgetState> states,
+                    ) {
+                      if (states.contains(WidgetState.selected)) {
+                        return activeRole == UserRole.driver
+                            ? AppColors.accentTeal.withValues(alpha: 0.2)
+                            : AppColors.primaryBlueLight;
+                      }
+                      return AppColors.surfaceWhite;
+                    }),
                   ),
                 ),
                 const SizedBox(height: 24),
@@ -173,7 +184,9 @@ class _ProfileScreenState extends State<ProfileScreen> {
               // User Avatar & Name
               CircleAvatar(
                 radius: 40,
-                backgroundColor: isDriverMode ? AppColors.accentTeal : AppColors.primaryNavy,
+                backgroundColor: isDriverMode
+                    ? AppColors.accentTeal
+                    : AppColors.primaryNavy,
                 child: Text(
                   userName.substring(0, 1).toUpperCase(),
                   style: const TextStyle(
@@ -201,15 +214,22 @@ class _ProfileScreenState extends State<ProfileScreen> {
               ),
               const SizedBox(height: 8),
               Container(
-                padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 4),
+                padding: const EdgeInsets.symmetric(
+                  horizontal: 12,
+                  vertical: 4,
+                ),
                 decoration: BoxDecoration(
-                  color: isDriverMode ? AppColors.accentTeal.withValues(alpha: 0.1) : AppColors.primaryBlueLight,
+                  color: isDriverMode
+                      ? AppColors.accentTeal.withValues(alpha: 0.1)
+                      : AppColors.primaryBlueLight,
                   borderRadius: BorderRadius.circular(20),
                 ),
                 child: Text(
                   roleLabel,
                   style: TextStyle(
-                    color: isDriverMode ? AppColors.accentTeal : AppColors.primaryBlue,
+                    color: isDriverMode
+                        ? AppColors.accentTeal
+                        : AppColors.primaryBlue,
                     fontWeight: FontWeight.bold,
                     fontSize: 12,
                   ),
@@ -227,54 +247,76 @@ class _ProfileScreenState extends State<ProfileScreen> {
                 child: Column(
                   children: [
                     ListTile(
-                      leading: const Icon(Icons.person_outline_rounded,
-                          color: AppColors.primaryBlue),
+                      leading: const Icon(
+                        Icons.person_outline_rounded,
+                        color: AppColors.primaryBlue,
+                      ),
                       title: const Text('Personal Information'),
-                      trailing: const Icon(Icons.chevron_right_rounded,
-                          color: AppColors.textMuted),
+                      trailing: const Icon(
+                        Icons.chevron_right_rounded,
+                        color: AppColors.textMuted,
+                      ),
                       onTap: () {
                         ScaffoldMessenger.of(context).showSnackBar(
-                          const SnackBar(content: Text('Profile details coming soon')),
+                          const SnackBar(
+                            content: Text('Profile details coming soon'),
+                          ),
                         );
                       },
                     ),
                     const Divider(height: 1, color: AppColors.cardBorder),
                     if (!isDriverMode) ...[
                       ListTile(
-                        leading: const Icon(Icons.child_care_rounded,
-                            color: AppColors.primaryBlue),
+                        leading: const Icon(
+                          Icons.child_care_rounded,
+                          color: AppColors.primaryBlue,
+                        ),
                         title: const Text('Managed Students'),
                         subtitle: Text(studentCountText),
-                        trailing: const Icon(Icons.chevron_right_rounded,
-                            color: AppColors.textMuted),
+                        trailing: const Icon(
+                          Icons.chevron_right_rounded,
+                          color: AppColors.textMuted,
+                        ),
                         onTap: () => context.go(AppRoutes.manageStudents),
                       ),
                       const Divider(height: 1, color: AppColors.cardBorder),
                     ] else ...[
                       ListTile(
-                        leading: const Icon(Icons.airport_shuttle_rounded,
-                            color: AppColors.primaryBlue),
+                        leading: const Icon(
+                          Icons.airport_shuttle_rounded,
+                          color: AppColors.primaryBlue,
+                        ),
                         title: const Text('Vehicle & License Details'),
                         subtitle: const Text('Van # WP NC-4821'),
-                        trailing: const Icon(Icons.chevron_right_rounded,
-                            color: AppColors.textMuted),
+                        trailing: const Icon(
+                          Icons.chevron_right_rounded,
+                          color: AppColors.textMuted,
+                        ),
                         onTap: () {
                           ScaffoldMessenger.of(context).showSnackBar(
-                            const SnackBar(content: Text('Vehicle details coming soon')),
+                            const SnackBar(
+                              content: Text('Vehicle details coming soon'),
+                            ),
                           );
                         },
                       ),
                       const Divider(height: 1, color: AppColors.cardBorder),
                     ],
                     ListTile(
-                      leading: const Icon(Icons.security_rounded,
-                          color: AppColors.primaryBlue),
+                      leading: const Icon(
+                        Icons.security_rounded,
+                        color: AppColors.primaryBlue,
+                      ),
                       title: const Text('Security & Password'),
-                      trailing: const Icon(Icons.chevron_right_rounded,
-                          color: AppColors.textMuted),
+                      trailing: const Icon(
+                        Icons.chevron_right_rounded,
+                        color: AppColors.textMuted,
+                      ),
                       onTap: () {
                         ScaffoldMessenger.of(context).showSnackBar(
-                          const SnackBar(content: Text('Security settings coming soon')),
+                          const SnackBar(
+                            content: Text('Security settings coming soon'),
+                          ),
                         );
                       },
                     ),
@@ -304,20 +346,14 @@ class _ProfileScreenState extends State<ProfileScreen> {
                   icon: const Icon(Icons.logout_rounded, size: 20),
                   label: const Text(
                     'Sign Out',
-                    style: TextStyle(
-                      fontSize: 16,
-                      fontWeight: FontWeight.bold,
-                    ),
+                    style: TextStyle(fontSize: 16, fontWeight: FontWeight.bold),
                   ),
                 ),
               ),
               const SizedBox(height: 24),
               const Text(
                 'N&D Smart SchoolPay v1.0.0',
-                style: TextStyle(
-                  fontSize: 12,
-                  color: AppColors.textMuted,
-                ),
+                style: TextStyle(fontSize: 12, color: AppColors.textMuted),
               ),
             ],
           ),

@@ -6,7 +6,7 @@ class Student {
   final String? section;
   final String? schoolName;
   final String? pickupLocation;
-  final String? pickupStatus; // "PICKED_UP", "ABSENT", "PENDING"
+  final String? pickupStatus; // "PICKED_UP", "DROPPED", "ABSENT", "PENDING"
 
   Student({
     required this.id,

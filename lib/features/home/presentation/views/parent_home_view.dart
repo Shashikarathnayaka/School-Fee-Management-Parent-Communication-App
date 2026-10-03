@@ -41,7 +41,8 @@ class ParentHomeView extends StatefulWidget {
   State<ParentHomeView> createState() => _ParentHomeViewState();
 }
 
-class _ParentHomeViewState extends State<ParentHomeView> {
+class _ParentHomeViewState extends State<ParentHomeView>
+    with WidgetsBindingObserver {
   late StudentListNotifier _studentListNotifier;
   late final ParentApiService _parentApiService =
       widget.parentApiService ?? ServiceLocator.instance.parentApiService;
@@ -50,6 +51,7 @@ class _ParentHomeViewState extends State<ParentHomeView> {
   ParentProfile? _profile;
 
   // ── Dashboard state ────────────────────────────────────────────────────────
+  List<Fee> _fees = [];
   FeeSummary? _currentFee;
   FeeSummary? _upcomingFee;
   List<PaymentRecord> _recentPayments = [];
@@ -66,24 +68,28 @@ class _ParentHomeViewState extends State<ParentHomeView> {
     _initNotifier();
     _studentListNotifier.addListener(_onStudentListChanged);
     _syncSelectedStudent();
-    _studentListNotifier.fetchStudents();
 
-    _loadDashboardData();
-
-    // Show become-driver popup after the first frame if the parent
-    // hasn't already registered as a driver and hasn't dismissed it this session.
     WidgetsBinding.instance.addPostFrameCallback((_) {
+      if (!mounted) return;
+      _studentListNotifier.fetchStudents();
       _maybeShowBecomeDriverDialog();
     });
+
+    _loadDashboardData();
   }
 
   void _initNotifier() {
     if (widget.studentListNotifier != null) {
       _studentListNotifier = widget.studentListNotifier!;
     } else {
-      _studentListNotifier = StudentListNotifier(
-        _parentApiService,
-      );
+      _studentListNotifier = StudentListNotifier(_parentApiService);
+    }
+  }
+
+  @override
+  void didChangeAppLifecycleState(AppLifecycleState state) {
+    if (state == AppLifecycleState.resumed) {
+      _loadDashboardData(isRefresh: true);
     }
   }
 
@@ -101,6 +107,7 @@ class _ParentHomeViewState extends State<ParentHomeView> {
 
   @override
   void dispose() {
+    WidgetsBinding.instance.removeObserver(this);
     _studentListNotifier.removeListener(_onStudentListChanged);
     super.dispose();
   }
@@ -109,6 +116,7 @@ class _ParentHomeViewState extends State<ParentHomeView> {
     if (!mounted) return;
     setState(() {
       _syncSelectedStudent();
+      _updateCurrentFee();
     });
   }
 
@@ -143,6 +151,25 @@ class _ParentHomeViewState extends State<ParentHomeView> {
     return '';
   }
 
+  static String _fullMonthName(int month) {
+    const months = [
+      'January',
+      'February',
+      'March',
+      'April',
+      'May',
+      'June',
+      'July',
+      'August',
+      'September',
+      'October',
+      'November',
+      'December',
+    ];
+    if (month >= 1 && month <= 12) return months[month - 1];
+    return '';
+  }
+
   FeeSummary _toFeeSummary(Fee fee, {required bool isUpcoming}) {
     final FeeStatus status;
     final isOverdue =
@@ -170,11 +197,101 @@ class _ParentHomeViewState extends State<ParentHomeView> {
       title: fee.description?.isNotEmpty == true
           ? fee.description!
           : (fee.studentName?.isNotEmpty == true
-              ? '${fee.studentName} - School Fee'
-              : 'School Fee'),
+                ? '${fee.studentName} - School Fee'
+                : 'School Fee'),
       status: status,
       amount: formattedAmount,
       dueDate: dueDateText,
+      tripsCount: fee.tripsCount,
+      tripsTotal: fee.tripsTotal,
+      perTrip: fee.perTripAmount,
+    );
+  }
+
+  void _updateCurrentFee() {
+    final student = _selectedStudent;
+    if (student == null) {
+      _currentFee = null;
+      return;
+    }
+
+    final now = DateTime.now();
+
+    // Look for fee for this student for the current month and year
+    Fee? studentFee;
+    for (final f in _fees) {
+      if (f.studentId == student.id) {
+        if (f.month == now.month && (f.year == null || f.year == now.year)) {
+          studentFee = f;
+          break;
+        }
+        if (f.dueDate != null &&
+            f.dueDate!.month == now.month &&
+            f.dueDate!.year == now.year) {
+          studentFee = f;
+          break;
+        }
+      }
+    }
+
+    // Fallback: non-PAID fee for this student, or any fee for this student
+    studentFee ??= _fees.cast<Fee?>().firstWhere(
+      (f) => f?.studentId == student.id && f?.status.toUpperCase() != 'PAID',
+      orElse: () => _fees.cast<Fee?>().firstWhere(
+        (f) => f?.studentId == student.id,
+        orElse: () => null,
+      ),
+    );
+
+    final monthName = _fullMonthName(studentFee?.month ?? now.month);
+    final title = '${student.name} - $monthName transport fee';
+
+    if (studentFee == null) {
+      _currentFee = FeeSummary(
+        id: '',
+        title: title,
+        status: FeeStatus.pending,
+        amount: 'Rs. 0',
+        dueDate: '',
+        tripsCount: 0,
+        tripsTotal: 40,
+        perTrip: null,
+      );
+      return;
+    }
+
+    final FeeStatus status;
+    final isOverdue =
+        studentFee.dueDate != null &&
+        studentFee.dueDate!.isBefore(DateTime.now());
+    if (studentFee.status.toUpperCase() == 'PAID') {
+      status = FeeStatus.paid;
+    } else if (isOverdue) {
+      status = FeeStatus.overdue;
+    } else if (studentFee.status.toUpperCase() == 'DUE') {
+      status = FeeStatus.due;
+    } else {
+      status = FeeStatus.pending;
+    }
+
+    final dateStr = studentFee.dueDate != null
+        ? '${studentFee.dueDate!.day} ${_monthName(studentFee.dueDate!.month)} ${studentFee.dueDate!.year}'
+        : '';
+    final dueDateText = dateStr.isNotEmpty ? 'Due $dateStr' : '';
+
+    final formattedAmount = studentFee.amount > 0
+        ? 'Rs. ${studentFee.amount.toStringAsFixed(0).replaceAllMapped(RegExp(r'(\d{1,3})(?=(\d{3})+(?!\d))'), (m) => '${m[1]},')}'
+        : 'Rs. 0';
+
+    _currentFee = FeeSummary(
+      id: studentFee.id,
+      title: title,
+      status: status,
+      amount: formattedAmount,
+      dueDate: dueDateText,
+      tripsCount: studentFee.tripsCount,
+      tripsTotal: studentFee.tripsTotal,
+      perTrip: studentFee.perTripAmount,
     );
   }
 
@@ -189,9 +306,9 @@ class _ParentHomeViewState extends State<ParentHomeView> {
       final results = await Future.wait([
         _parentApiService.getProfile().catchError((_) => null),
         _parentApiService.getFees().catchError((_) => <Fee>[]),
-        _parentApiService
-            .getNotifications()
-            .catchError((_) => <AppNotification>[]),
+        _parentApiService.getNotifications().catchError(
+          (_) => <AppNotification>[],
+        ),
       ]);
 
       if (!mounted) return;
@@ -204,7 +321,9 @@ class _ParentHomeViewState extends State<ParentHomeView> {
         _profile = profile;
       }
 
-      // Filter non-PAID fees for current & upcoming (DUE / PENDING / OVERDUE)
+      _fees = fees;
+
+      // Filter non-PAID fees for upcoming
       final pendingFees = fees
           .where((f) => f.status.toUpperCase() != 'PAID')
           .toList();
@@ -215,11 +334,6 @@ class _ParentHomeViewState extends State<ParentHomeView> {
         if (b.dueDate == null) return -1;
         return a.dueDate!.compareTo(b.dueDate!);
       });
-
-      FeeSummary? currentFee;
-      if (pendingFees.isNotEmpty) {
-        currentFee = _toFeeSummary(pendingFees.first, isUpcoming: false);
-      }
 
       FeeSummary? upcomingFee;
       if (pendingFees.length > 1) {
@@ -236,14 +350,17 @@ class _ParentHomeViewState extends State<ParentHomeView> {
         if (b.dueDate == null) return -1;
         return b.dueDate!.compareTo(a.dueDate!);
       });
-      final recentPayments =
-          paidFees.take(5).map(PaymentRecord.fromFee).toList();
+      final recentPayments = paidFees
+          .take(5)
+          .map(PaymentRecord.fromFee)
+          .toList();
 
-      final notifications =
-          rawNotifications.map(NotificationItem.fromNotification).toList();
+      final notifications = rawNotifications
+          .map(NotificationItem.fromNotification)
+          .toList();
 
       setState(() {
-        _currentFee = currentFee;
+        _updateCurrentFee();
         _upcomingFee = upcomingFee;
         _recentPayments = recentPayments;
         _notifications = notifications;
@@ -447,8 +564,10 @@ class _ParentHomeViewState extends State<ParentHomeView> {
             physics: const AlwaysScrollableScrollPhysics(
               parent: BouncingScrollPhysics(),
             ),
-            padding:
-                const EdgeInsets.symmetric(horizontal: 20.0, vertical: 16.0),
+            padding: const EdgeInsets.symmetric(
+              horizontal: 20.0,
+              vertical: 16.0,
+            ),
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
@@ -530,6 +649,7 @@ class _ParentHomeViewState extends State<ParentHomeView> {
                     onStudentChanged: (student) {
                       setState(() {
                         _selectedStudent = student;
+                        _updateCurrentFee();
                       });
                     },
                     onViewDetails: () {
@@ -545,8 +665,7 @@ class _ParentHomeViewState extends State<ParentHomeView> {
                     decoration: BoxDecoration(
                       color: AppColors.surfaceWhite,
                       borderRadius: BorderRadius.circular(16),
-                      border:
-                          Border.all(color: AppColors.cardBorder, width: 1),
+                      border: Border.all(color: AppColors.cardBorder, width: 1),
                       boxShadow: [
                         BoxShadow(
                           color: Colors.black.withValues(alpha: 0.03),
@@ -612,9 +731,8 @@ class _ParentHomeViewState extends State<ParentHomeView> {
                 else if (_currentFee != null)
                   FeeSummaryCard(
                     feeSummary: _currentFee!,
-                    onPayNow: () {
-                      _showPlaceholderNotice(
-                          AppStrings.paymentModulePlaceholder);
+                    onViewDetails: () {
+                      context.go(AppRoutes.payments);
                     },
                   ),
                 if (_isDashboardLoading || _currentFee != null)

@@ -38,7 +38,10 @@ class _ManageStudentsScreenState extends State<ManageStudentsScreen> {
     super.initState();
     _initNotifier();
     _studentListNotifier.addListener(_onStudentListChanged);
-    _studentListNotifier.fetchStudents();
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      if (!mounted) return;
+      _studentListNotifier.fetchStudents();
+    });
   }
 
   void _initNotifier() {
@@ -126,7 +129,10 @@ class _ManageStudentsScreenState extends State<ManageStudentsScreen> {
         backgroundColor: AppColors.primaryNavy,
         elevation: 0,
         leading: IconButton(
-          icon: const Icon(Icons.arrow_back_rounded, color: AppColors.surfaceWhite),
+          icon: const Icon(
+            Icons.arrow_back_rounded,
+            color: AppColors.surfaceWhite,
+          ),
           tooltip: 'Back to Profile',
           onPressed: () {
             if (context.canPop()) {
@@ -145,7 +151,10 @@ class _ManageStudentsScreenState extends State<ManageStudentsScreen> {
         ),
         actions: [
           IconButton(
-            icon: const Icon(Icons.person_add_rounded, color: AppColors.surfaceWhite),
+            icon: const Icon(
+              Icons.person_add_rounded,
+              color: AppColors.surfaceWhite,
+            ),
             tooltip: 'Add Student',
             onPressed: _navigateToAddStudent,
           ),
@@ -160,7 +169,10 @@ class _ManageStudentsScreenState extends State<ManageStudentsScreen> {
           ? FloatingActionButton.extended(
               onPressed: _navigateToAddStudent,
               backgroundColor: AppColors.primaryBlue,
-              icon: const Icon(Icons.person_add_rounded, color: AppColors.surfaceWhite),
+              icon: const Icon(
+                Icons.person_add_rounded,
+                color: AppColors.surfaceWhite,
+              ),
               label: const Text(
                 'Add Student',
                 style: TextStyle(
@@ -170,9 +182,7 @@ class _ManageStudentsScreenState extends State<ManageStudentsScreen> {
               ),
             )
           : null,
-      body: SafeArea(
-        child: _buildBody(theme),
-      ),
+      body: SafeArea(child: _buildBody(theme)),
     );
   }
 
@@ -186,7 +196,8 @@ class _ManageStudentsScreenState extends State<ManageStudentsScreen> {
       );
     }
 
-    if (!_studentListNotifier.hasFetchError && _studentListNotifier.students.isEmpty) {
+    if (!_studentListNotifier.hasFetchError &&
+        _studentListNotifier.students.isEmpty) {
       return _buildEmptyState(theme);
     }
 
@@ -197,7 +208,9 @@ class _ManageStudentsScreenState extends State<ManageStudentsScreen> {
       onRefresh: _fetchStudents,
       color: AppColors.primaryBlue,
       child: ListView.separated(
-        physics: const AlwaysScrollableScrollPhysics(parent: BouncingScrollPhysics()),
+        physics: const AlwaysScrollableScrollPhysics(
+          parent: BouncingScrollPhysics(),
+        ),
         padding: const EdgeInsets.symmetric(horizontal: 20.0, vertical: 16.0),
         itemCount: students.length + (hasError ? 1 : 0),
         separatorBuilder: (context, index) => const SizedBox(height: 12),
@@ -212,12 +225,19 @@ class _ManageStudentsScreenState extends State<ManageStudentsScreen> {
               ),
               child: Row(
                 children: [
-                  Icon(Icons.cloud_off_rounded, size: 18, color: Colors.amber.shade800),
+                  Icon(
+                    Icons.cloud_off_rounded,
+                    size: 18,
+                    color: Colors.amber.shade800,
+                  ),
                   const SizedBox(width: 8),
                   Expanded(
                     child: Text(
                       'Offline preview — showing cached student data.',
-                      style: TextStyle(fontSize: 12, color: Colors.amber.shade900),
+                      style: TextStyle(
+                        fontSize: 12,
+                        color: Colors.amber.shade900,
+                      ),
                     ),
                   ),
                 ],

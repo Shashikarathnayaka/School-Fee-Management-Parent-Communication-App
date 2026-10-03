@@ -12,6 +12,9 @@ class PaymentRecord {
   final String studentId;
   final String driverId;
   final String studentName;
+  final int tripsCount;
+  final int tripsTotal;
+  final double? perTripAmount;
 
   const PaymentRecord({
     required this.id,
@@ -24,6 +27,9 @@ class PaymentRecord {
     this.studentId = '',
     this.driverId = '',
     this.studentName = '',
+    this.tripsCount = 0,
+    this.tripsTotal = 40,
+    this.perTripAmount,
   });
 
   static String _monthName(int month) {
@@ -86,6 +92,9 @@ class PaymentRecord {
       hasReceipt: status == FeeStatus.paid,
       studentId: fee.studentId,
       studentName: fee.studentName ?? '',
+      tripsCount: fee.tripsCount,
+      tripsTotal: fee.tripsTotal,
+      perTripAmount: fee.perTripAmount,
     );
   }
 }

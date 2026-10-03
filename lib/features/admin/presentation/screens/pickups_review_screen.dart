@@ -1,4 +1,4 @@
-﻿import 'package:flutter/material.dart';
+import 'package:flutter/material.dart';
 import 'package:intl/intl.dart';
 
 import '../../../../app/theme/app_colors.dart';
@@ -17,6 +17,11 @@ import '../../../../core/services/admin_api_service.dart';
       label: 'Picked Up',
       bg: const Color(0xFFD1FAE5),
       fg: const Color(0xFF065F46),
+    ),
+    'DROPPED' => (
+      label: 'Dropped Off',
+      bg: const Color(0xFFDBEAFE),
+      fg: const Color(0xFF1D4ED8),
     ),
     'ABSENT' => (
       label: 'Absent',
@@ -566,6 +571,7 @@ class _MarkPickupSheetState extends State<_MarkPickupSheet> {
 
   static const _options = [
     (status: 'PICKED_UP', label: 'Picked Up', icon: Icons.check_circle_rounded),
+    (status: 'DROPPED', label: 'Dropped Off', icon: Icons.home_rounded),
     (status: 'ABSENT', label: 'Absent', icon: Icons.cancel_rounded),
     (status: 'PENDING', label: 'Pending', icon: Icons.hourglass_top_rounded),
   ];

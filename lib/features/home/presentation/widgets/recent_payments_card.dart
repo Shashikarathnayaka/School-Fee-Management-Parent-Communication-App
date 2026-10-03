@@ -78,6 +78,17 @@ class RecentPaymentsCard extends StatelessWidget {
                           color: AppColors.primaryNavy,
                         ),
                       ),
+                      if (item.perTripAmount != null) ...[
+                        const SizedBox(height: 2),
+                        Text(
+                          '${item.tripsCount} trips x Rs. ${item.perTripAmount! % 1 == 0 ? item.perTripAmount!.toInt() : item.perTripAmount!.toStringAsFixed(2)}',
+                          style: const TextStyle(
+                            fontSize: 12,
+                            color: AppColors.primaryBlue,
+                            fontWeight: FontWeight.w600,
+                          ),
+                        ),
+                      ],
                       const SizedBox(height: 2),
                       Text(
                         item.date,

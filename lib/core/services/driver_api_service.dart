@@ -6,6 +6,94 @@ import '../models/notification_model.dart';
 import '../network/api_client.dart';
 import '../network/api_config.dart';
 
+class PickupCharge {
+  final String? kind;
+  final double amount;
+
+  const PickupCharge({this.kind, required this.amount});
+
+  factory PickupCharge.fromJson(Map<String, dynamic> json) {
+    double parseAmount(dynamic val) {
+      if (val == null) return 0.0;
+      if (val is num) return val.toDouble();
+      return num.tryParse(val.toString())?.toDouble() ?? 0.0;
+    }
+
+    return PickupCharge(
+      kind: json['kind']?.toString(),
+      amount: parseAmount(json['amount']),
+    );
+  }
+}
+
+class PickupUpdateResult {
+  final dynamic pickup;
+  final Fee? fee;
+  final PickupCharge? charge;
+
+  const PickupUpdateResult({
+    this.pickup,
+    this.fee,
+    this.charge,
+  });
+
+  factory PickupUpdateResult.fromJson(Map<String, dynamic> json) {
+    return PickupUpdateResult(
+      pickup: json['pickup'],
+      fee: json['fee'] is Map
+          ? Fee.fromJson(Map<String, dynamic>.from(json['fee'] as Map))
+          : null,
+      charge: json['charge'] is Map
+          ? PickupCharge.fromJson(Map<String, dynamic>.from(json['charge'] as Map))
+          : null,
+    );
+  }
+
+  dynamic operator [](String key) {
+    switch (key) {
+      case 'pickup':
+        return pickup;
+      case 'fee':
+        return fee;
+      case 'charge':
+        return charge;
+      default:
+        return null;
+    }
+  }
+}
+
+class FeeReminderResult {
+  final int sent;
+  final int skipped;
+
+  const FeeReminderResult({this.sent = 0, this.skipped = 0});
+
+  factory FeeReminderResult.fromJson(Map<String, dynamic> json) {
+    int parseInt(dynamic val) {
+      if (val == null) return 0;
+      if (val is num) return val.toInt();
+      return int.tryParse(val.toString()) ?? 0;
+    }
+
+    return FeeReminderResult(
+      sent: parseInt(json['sent']),
+      skipped: parseInt(json['skipped']),
+    );
+  }
+
+  dynamic operator [](String key) {
+    switch (key) {
+      case 'sent':
+        return sent;
+      case 'skipped':
+        return skipped;
+      default:
+        return null;
+    }
+  }
+}
+
 class DriverApiService {
   final ApiClient _apiClient;
 
@@ -88,42 +176,80 @@ class DriverApiService {
     await _apiClient.delete('${ApiConfig.driverRoutes}/$routeId/students/$studentId');
   }
 
-  Future<void> updatePickupStatus({
+  Future<PickupUpdateResult> updatePickupStatus({
     required String studentId,
     required String status,
     required String routeId,
   }) async {
-    await _apiClient.patch(
+    final response = await _apiClient.patch(
       '${ApiConfig.driverPickup}/$studentId',
       body: {
-        'status': status, // "PICKED_UP", "ABSENT", "PENDING"
+        'status': status, // "PICKED_UP", "DROPPED", "ABSENT", "PENDING"
         'routeId': routeId,
       },
     );
+    if (response is Map) {
+      return PickupUpdateResult.fromJson(
+        Map<String, dynamic>.from(response),
+      );
+    }
+    return const PickupUpdateResult();
   }
 
   // Convenience method to set a student as "get in the bus"
-  Future<void> markStudentPickedUp({
+  Future<PickupUpdateResult> markStudentPickedUp({
     required String studentId,
     required String routeId,
   }) async {
-    await updatePickupStatus(
+    return await updatePickupStatus(
       studentId: studentId,
       status: 'PICKED_UP',
       routeId: routeId,
     );
   }
 
-  // Convenience method to set a student as absent
-  Future<void> markStudentAbsent({
+  // Convenience method to mark a student as dropped off
+  Future<PickupUpdateResult> markStudentDropped({
     required String studentId,
     required String routeId,
   }) async {
-    await updatePickupStatus(
+    return await updatePickupStatus(
+      studentId: studentId,
+      status: 'DROPPED',
+      routeId: routeId,
+    );
+  }
+
+  // Convenience method to set a student as absent
+  Future<PickupUpdateResult> markStudentAbsent({
+    required String studentId,
+    required String routeId,
+  }) async {
+    return await updatePickupStatus(
       studentId: studentId,
       status: 'ABSENT',
       routeId: routeId,
     );
+  }
+
+  Future<FeeReminderResult> sendFeeReminders({
+    int? month,
+    int? year,
+  }) async {
+    final body = <String, dynamic>{};
+    if (month != null) body['month'] = month;
+    if (year != null) body['year'] = year;
+
+    final response = await _apiClient.post(
+      ApiConfig.driverFeesRemind,
+      body: body.isNotEmpty ? body : null,
+    );
+    if (response is Map) {
+      return FeeReminderResult.fromJson(
+        Map<String, dynamic>.from(response),
+      );
+    }
+    return const FeeReminderResult();
   }
 
   Future<List<AppNotification>> getNotifications() async {

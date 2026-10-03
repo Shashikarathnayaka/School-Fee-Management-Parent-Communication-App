@@ -25,6 +25,9 @@ class FeeSummary {
   final String amount;
   final String dueDate;
   final String currency;
+  final int tripsCount;
+  final int tripsTotal;
+  final double? perTrip;
 
   const FeeSummary({
     required this.id,
@@ -33,5 +36,8 @@ class FeeSummary {
     required this.amount,
     required this.dueDate,
     this.currency = 'Rs.',
+    this.tripsCount = 0,
+    this.tripsTotal = 40,
+    this.perTrip,
   });
 }

@@ -39,6 +39,7 @@ class _DriverStudentsScreenState extends State<DriverStudentsScreen> {
   List<DriverRoute> _routes = [];
   String? _selectedRouteId;
   bool _isLoading = true;
+  bool _isSendingReminders = false;
   String? _errorMessage;
 
   @override
@@ -77,6 +78,83 @@ class _DriverStudentsScreenState extends State<DriverStudentsScreen> {
     }
   }
 
+  Future<void> _confirmAndSendFeeReminders() async {
+    final confirmed = await showDialog<bool>(
+      context: context,
+      builder: (dialogCtx) => AlertDialog(
+        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
+        title: const Text(
+          'Send Fee Reminders',
+          style: TextStyle(
+            fontWeight: FontWeight.bold,
+            color: AppColors.primaryNavy,
+          ),
+        ),
+        content: const Text(
+          "Send this month's fee reminder to all parents with unpaid fees?",
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.of(dialogCtx).pop(false),
+            child: const Text('Cancel'),
+          ),
+          ElevatedButton(
+            style: ElevatedButton.styleFrom(
+              backgroundColor: AppColors.primaryBlue,
+              foregroundColor: AppColors.surfaceWhite,
+              shape: RoundedRectangleBorder(
+                borderRadius: BorderRadius.circular(8),
+              ),
+            ),
+            onPressed: () => Navigator.of(dialogCtx).pop(true),
+            child: const Text('Send'),
+          ),
+        ],
+      ),
+    );
+
+    if (confirmed != true) return;
+
+    setState(() => _isSendingReminders = true);
+    try {
+      final now = DateTime.now();
+      final result = await _driverApiService.sendFeeReminders(
+        month: now.month,
+        year: now.year,
+      );
+      if (!mounted) return;
+
+      final sentCount = result.sent;
+      final skippedCount = result.skipped;
+      String msg =
+          'Reminder sent to $sentCount parent${sentCount == 1 ? '' : 's'}';
+      if (skippedCount > 0) {
+        msg += ' ($skippedCount skipped)';
+      }
+
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text(msg),
+          backgroundColor: AppColors.success,
+          behavior: SnackBarBehavior.floating,
+        ),
+      );
+    } catch (e) {
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text(formatErrorMessage(e)),
+          backgroundColor: AppColors.error,
+          behavior: SnackBarBehavior.floating,
+        ),
+      );
+    } finally {
+      if (mounted) {
+        setState(() => _isSendingReminders = false);
+      }
+    }
+  }
+
   List<Student> get _displayedStudents {
     if (_routes.isEmpty) return [];
 
@@ -109,6 +187,8 @@ class _DriverStudentsScreenState extends State<DriverStudentsScreen> {
     switch (status.toUpperCase()) {
       case 'PICKED_UP':
         return PickupStatus.pickedUp;
+      case 'DROPPED':
+        return PickupStatus.dropped;
       case 'ABSENT':
         return PickupStatus.absent;
       case 'CANCELLED':
@@ -759,6 +839,97 @@ class _DriverStudentsScreenState extends State<DriverStudentsScreen> {
     );
   }
 
+  Widget _buildFeeReminderCard() {
+    return Container(
+      margin: const EdgeInsets.fromLTRB(20, 14, 20, 4),
+      padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
+      decoration: BoxDecoration(
+        color: AppColors.surfaceWhite,
+        borderRadius: BorderRadius.circular(14),
+        border: Border.all(color: AppColors.cardBorder),
+        boxShadow: [
+          BoxShadow(
+            color: Colors.black.withValues(alpha: 0.02),
+            blurRadius: 8,
+            offset: const Offset(0, 2),
+          ),
+        ],
+      ),
+      child: Row(
+        children: [
+          Container(
+            padding: const EdgeInsets.all(8),
+            decoration: BoxDecoration(
+              color: AppColors.primaryBlueLight,
+              borderRadius: BorderRadius.circular(10),
+            ),
+            child: const Icon(
+              Icons.notifications_active_rounded,
+              size: 20,
+              color: AppColors.primaryBlue,
+            ),
+          ),
+          const SizedBox(width: 12),
+          const Expanded(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text(
+                  'Fee Reminders',
+                  style: TextStyle(
+                    fontSize: 14,
+                    fontWeight: FontWeight.bold,
+                    color: AppColors.primaryNavy,
+                  ),
+                ),
+                Text(
+                  'Remind parents with unpaid fees',
+                  style: TextStyle(
+                    fontSize: 12,
+                    color: AppColors.textSecondary,
+                  ),
+                ),
+              ],
+            ),
+          ),
+          if (_isSendingReminders)
+            const SizedBox(
+              width: 20,
+              height: 20,
+              child: CircularProgressIndicator(
+                strokeWidth: 2,
+                valueColor: AlwaysStoppedAnimation<Color>(
+                  AppColors.primaryBlue,
+                ),
+              ),
+            )
+          else
+            OutlinedButton(
+              onPressed: _confirmAndSendFeeReminders,
+              style: OutlinedButton.styleFrom(
+                foregroundColor: AppColors.primaryBlue,
+                side: const BorderSide(color: AppColors.primaryBlue),
+                padding:
+                    const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
+                minimumSize: Size.zero,
+                tapTargetSize: MaterialTapTargetSize.shrinkWrap,
+                shape: RoundedRectangleBorder(
+                  borderRadius: BorderRadius.circular(8),
+                ),
+              ),
+              child: const Text(
+                'Send',
+                style: TextStyle(
+                  fontSize: 12,
+                  fontWeight: FontWeight.bold,
+                ),
+              ),
+            ),
+        ],
+      ),
+    );
+  }
+
   @override
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
@@ -777,6 +948,32 @@ class _DriverStudentsScreenState extends State<DriverStudentsScreen> {
           ),
         ),
         actions: [
+          if (_isSendingReminders)
+            const Padding(
+              padding: EdgeInsets.symmetric(horizontal: 14),
+              child: Center(
+                child: SizedBox(
+                  width: 20,
+                  height: 20,
+                  child: CircularProgressIndicator(
+                    strokeWidth: 2,
+                    valueColor: AlwaysStoppedAnimation<Color>(
+                      AppColors.surfaceWhite,
+                    ),
+                  ),
+                ),
+              ),
+            )
+          else
+            IconButton(
+              key: const Key('send_fee_reminders_btn'),
+              icon: const Icon(
+                Icons.notification_add_rounded,
+                color: AppColors.surfaceWhite,
+              ),
+              tooltip: 'Send fee reminders',
+              onPressed: _confirmAndSendFeeReminders,
+            ),
           IconButton(
             icon: const Icon(
               Icons.person_add_rounded,
@@ -811,6 +1008,7 @@ class _DriverStudentsScreenState extends State<DriverStudentsScreen> {
         child: Column(
           children: [
             _buildRouteFilter(),
+            _buildFeeReminderCard(),
             Expanded(
               child: RefreshIndicator(
                 color: AppColors.primaryBlue,

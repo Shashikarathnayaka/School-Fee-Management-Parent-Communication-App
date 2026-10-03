@@ -5,6 +5,7 @@ import '../../../home/domain/models/notification_item.dart';
 enum PickupStatus {
   pending,
   pickedUp,
+  dropped,
   absent,
   cancelled,
 }
@@ -16,6 +17,8 @@ extension PickupStatusX on PickupStatus {
         return 'Pending';
       case PickupStatus.pickedUp:
         return 'Picked Up';
+      case PickupStatus.dropped:
+        return 'Dropped Off';
       case PickupStatus.absent:
         return 'Absent';
       case PickupStatus.cancelled:
@@ -29,6 +32,8 @@ extension PickupStatusX on PickupStatus {
         return Icons.schedule_rounded;
       case PickupStatus.pickedUp:
         return Icons.check_circle_outline_rounded;
+      case PickupStatus.dropped:
+        return Icons.home_rounded;
       case PickupStatus.absent:
         return Icons.cancel_outlined;
       case PickupStatus.cancelled:
@@ -42,6 +47,8 @@ extension PickupStatusX on PickupStatus {
         return const Color(0xFFF59E0B);
       case PickupStatus.pickedUp:
         return const Color(0xFF10B981);
+      case PickupStatus.dropped:
+        return const Color(0xFF2563EB);
       case PickupStatus.absent:
         return const Color(0xFFEF4444);
       case PickupStatus.cancelled:
@@ -97,6 +104,9 @@ class PickupRecord {
     switch (rawStatus) {
       case 'PICKED_UP':
         status = PickupStatus.pickedUp;
+        break;
+      case 'DROPPED':
+        status = PickupStatus.dropped;
         break;
       case 'ABSENT':
         status = PickupStatus.absent;

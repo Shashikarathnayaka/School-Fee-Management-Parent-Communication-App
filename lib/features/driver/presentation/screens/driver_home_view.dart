@@ -194,19 +194,47 @@ class _DriverHomeViewState extends State<DriverHomeView> {
 
     setState(() => _updatingStudentId = student.id);
     try {
-      await _driverApiService.updatePickupStatus(
+      final result = await _driverApiService.updatePickupStatus(
         studentId: student.id,
         status: status,
         routeId: routeId,
       );
       await _loadTodayRoutes();
-      _showSnack(
-        status == 'PICKED_UP'
-            ? '${student.name} marked as picked up.'
-            : '${student.name} marked as absent.',
-      );
+
+      final chargeAmount = result.charge?.amount;
+      final chargeSuffix = (chargeAmount != null && chargeAmount > 0)
+          ? ' - Rs. ${chargeAmount % 1 == 0 ? chargeAmount.toInt() : chargeAmount.toStringAsFixed(2)} added'
+          : '';
+
+      final String message;
+      switch (status) {
+        case 'PICKED_UP':
+          message = '${student.name} picked up$chargeSuffix';
+          break;
+        case 'DROPPED':
+          message = '${student.name} dropped off$chargeSuffix';
+          break;
+        case 'ABSENT':
+          message = '${student.name} marked as absent.';
+          break;
+        case 'PENDING':
+        default:
+          message = '${student.name} reset to pending.';
+          break;
+      }
+      _showSnack(message);
     } catch (e) {
-      _showSnack(formatErrorMessage(e), isError: true);
+      if (e is ApiException &&
+          (e.code == 'PICKUP_REQUIRED' ||
+              e.message.contains('PICKUP_REQUIRED') ||
+              e.statusCode == 409)) {
+        _showSnack(
+          'Student must be marked as Picked Up before they can be Dropped Off.',
+          isError: true,
+        );
+      } else {
+        _showSnack(formatErrorMessage(e), isError: true);
+      }
     } finally {
       if (mounted) setState(() => _updatingStudentId = null);
     }
@@ -233,6 +261,8 @@ class _DriverHomeViewState extends State<DriverHomeView> {
     switch (raw?.toUpperCase()) {
       case 'PICKED_UP':
         return PickupStatus.pickedUp;
+      case 'DROPPED':
+        return PickupStatus.dropped;
       case 'ABSENT':
         return PickupStatus.absent;
       case 'CANCELLED':
@@ -584,15 +614,12 @@ class _DriverHomeViewState extends State<DriverHomeView> {
 
   Widget _buildPickupRow(Student student) {
     final status = _toPickupStatus(student.pickupStatus);
-    // Use the route's start time from the first route as a display hint when
-    // no per-student scheduled time is available from the backend.
     final timeHint = _todayRoutes.isNotEmpty
         ? (_todayRoutes.first.startTime ?? '--:--')
         : '--:--';
 
-    final isUpdating = _updatingStudentId == student.id;
-    final isPickedUp = status == PickupStatus.pickedUp;
-    final isAbsent = status == PickupStatus.absent;
+    final isRowUpdating = _updatingStudentId == student.id;
+    final isAnyUpdating = _updatingStudentId != null;
 
     return Container(
       padding: const EdgeInsets.all(14),
@@ -664,59 +691,217 @@ class _DriverHomeViewState extends State<DriverHomeView> {
             ],
           ),
           const SizedBox(height: 12),
-          Row(
-            children: [
-              Expanded(
-                child: ElevatedButton.icon(
-                  key: Key('pickup_btn_${student.id}'),
-                  onPressed: (isUpdating || isPickedUp)
-                      ? null
-                      : () => _handlePickup(student, 'PICKED_UP'),
-                  icon: isUpdating
-                      ? const SizedBox(
-                          width: 14,
-                          height: 14,
-                          child: CircularProgressIndicator(
-                            strokeWidth: 2,
-                            color: AppColors.surfaceWhite,
-                          ),
-                        )
-                      : const Icon(Icons.check_circle_rounded, size: 16),
-                  label: const Text('Picked Up'),
-                  style: ElevatedButton.styleFrom(
-                    backgroundColor: AppColors.success,
-                    foregroundColor: AppColors.surfaceWhite,
-                    padding: const EdgeInsets.symmetric(vertical: 10),
-                    shape: RoundedRectangleBorder(
-                      borderRadius: BorderRadius.circular(10),
-                    ),
+          if (isRowUpdating)
+            Container(
+              height: 40,
+              alignment: Alignment.center,
+              child: const SizedBox(
+                width: 20,
+                height: 20,
+                child: CircularProgressIndicator(
+                  strokeWidth: 2,
+                  valueColor: AlwaysStoppedAnimation<Color>(
+                    AppColors.primaryBlue,
                   ),
                 ),
               ),
-              const SizedBox(width: 10),
-              Expanded(
-                child: OutlinedButton.icon(
-                  key: Key('absent_btn_${student.id}'),
-                  onPressed: (isUpdating || isAbsent)
-                      ? null
-                      : () => _handlePickup(student, 'ABSENT'),
-                  icon: const Icon(Icons.cancel_rounded, size: 16),
-                  label: const Text('Absent'),
-                  style: OutlinedButton.styleFrom(
-                    foregroundColor: AppColors.error,
-                    side: BorderSide(
-                      color: (isUpdating || isAbsent)
-                          ? AppColors.cardBorder
-                          : AppColors.error,
-                    ),
-                    padding: const EdgeInsets.symmetric(vertical: 10),
-                    shape: RoundedRectangleBorder(
-                      borderRadius: BorderRadius.circular(10),
-                    ),
+            )
+          else
+            _buildPickupActions(student, status, isAnyUpdating),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildPickupActions(
+    Student student,
+    PickupStatus status,
+    bool isAnyUpdating,
+  ) {
+    switch (status) {
+      case PickupStatus.pending:
+        return Row(
+          children: [
+            Expanded(
+              child: ElevatedButton.icon(
+                key: Key('pickup_btn_${student.id}'),
+                onPressed: isAnyUpdating
+                    ? null
+                    : () => _handlePickup(student, 'PICKED_UP'),
+                icon: const Icon(Icons.check_circle_rounded, size: 16),
+                label: const Text('Picked Up'),
+                style: ElevatedButton.styleFrom(
+                  minimumSize: const Size(0, 44),
+                  backgroundColor: AppColors.success,
+                  foregroundColor: AppColors.surfaceWhite,
+                  padding: const EdgeInsets.symmetric(vertical: 10),
+                  textStyle: const TextStyle(
+                    fontSize: 13,
+                    fontWeight: FontWeight.w600,
+                  ),
+                  shape: RoundedRectangleBorder(
+                    borderRadius: BorderRadius.circular(10),
                   ),
                 ),
               ),
-            ],
+            ),
+            const SizedBox(width: 10),
+            Expanded(
+              child: OutlinedButton.icon(
+                key: Key('absent_btn_${student.id}'),
+                onPressed: isAnyUpdating
+                    ? null
+                    : () => _handlePickup(student, 'ABSENT'),
+                icon: const Icon(Icons.cancel_rounded, size: 16),
+                label: const Text('Absent'),
+                style: OutlinedButton.styleFrom(
+                  minimumSize: const Size(0, 44),
+                  foregroundColor: AppColors.error,
+                  side: const BorderSide(color: AppColors.error),
+                  padding: const EdgeInsets.symmetric(vertical: 10),
+                  textStyle: const TextStyle(
+                    fontSize: 13,
+                    fontWeight: FontWeight.w600,
+                  ),
+                  shape: RoundedRectangleBorder(
+                    borderRadius: BorderRadius.circular(10),
+                  ),
+                ),
+              ),
+            ),
+          ],
+        );
+
+      case PickupStatus.pickedUp:
+        return Row(
+          children: [
+            Expanded(
+              child: ElevatedButton.icon(
+                key: Key('dropped_btn_${student.id}'),
+                onPressed: isAnyUpdating
+                    ? null
+                    : () => _handlePickup(student, 'DROPPED'),
+                icon: const Icon(Icons.home_rounded, size: 16),
+                label: const Text('Dropped Off'),
+                style: ElevatedButton.styleFrom(
+                  minimumSize: const Size(0, 44),
+                  backgroundColor: AppColors.primaryBlue,
+                  foregroundColor: AppColors.surfaceWhite,
+                  padding: const EdgeInsets.symmetric(vertical: 10),
+                  textStyle: const TextStyle(
+                    fontSize: 13,
+                    fontWeight: FontWeight.w600,
+                  ),
+                  shape: RoundedRectangleBorder(
+                    borderRadius: BorderRadius.circular(10),
+                  ),
+                ),
+              ),
+            ),
+            const SizedBox(width: 10),
+            _buildUndoButton(student, isAnyUpdating, 'PENDING'),
+          ],
+        );
+
+      case PickupStatus.dropped:
+        return Row(
+          children: [
+            Expanded(
+              child: _buildStatusBanner(
+                icon: Icons.check_circle_rounded,
+                label: 'Completed',
+                background: const Color(0xFFDBEAFE),
+                foreground: const Color(0xFF1D4ED8),
+              ),
+            ),
+            const SizedBox(width: 10),
+            _buildUndoButton(student, isAnyUpdating, 'PICKED_UP'),
+          ],
+        );
+
+      case PickupStatus.absent:
+        return Row(
+          children: [
+            Expanded(
+              child: _buildStatusBanner(
+                icon: Icons.cancel_rounded,
+                label: 'Absent',
+                background: AppColors.errorLight,
+                foreground: AppColors.error,
+              ),
+            ),
+            const SizedBox(width: 10),
+            _buildUndoButton(student, isAnyUpdating, 'PENDING'),
+          ],
+        );
+
+      case PickupStatus.cancelled:
+        return Container(
+          padding: const EdgeInsets.symmetric(vertical: 8),
+          alignment: Alignment.center,
+          child: const Text(
+            'Ride Cancelled',
+            style: TextStyle(
+              color: AppColors.textSecondary,
+              fontWeight: FontWeight.w600,
+            ),
+          ),
+        );
+    }
+  }
+
+  /// Small "Undo" button used next to a status banner.
+  /// NOTE: the app theme sets minimumSize to Size(double.infinity, 54) for
+  /// buttons, so a button placed in a Row without Expanded must override it.
+  Widget _buildUndoButton(
+    Student student,
+    bool isAnyUpdating,
+    String targetStatus,
+  ) {
+    return OutlinedButton.icon(
+      key: Key('undo_btn_${student.id}'),
+      onPressed: isAnyUpdating
+          ? null
+          : () => _handlePickup(student, targetStatus),
+      icon: const Icon(Icons.undo_rounded, size: 16),
+      label: const Text('Undo'),
+      style: OutlinedButton.styleFrom(
+        minimumSize: const Size(0, 44),
+        foregroundColor: AppColors.textSecondary,
+        side: const BorderSide(color: AppColors.cardBorder),
+        padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 10),
+        textStyle: const TextStyle(fontSize: 13, fontWeight: FontWeight.w600),
+        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
+      ),
+    );
+  }
+
+  /// Status banner shown in place of the primary button (Completed / Absent).
+  Widget _buildStatusBanner({
+    required IconData icon,
+    required String label,
+    required Color background,
+    required Color foreground,
+  }) {
+    return Container(
+      constraints: const BoxConstraints(minHeight: 44),
+      padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+      decoration: BoxDecoration(
+        color: background,
+        borderRadius: BorderRadius.circular(10),
+      ),
+      child: Row(
+        mainAxisAlignment: MainAxisAlignment.center,
+        children: [
+          Icon(icon, size: 16, color: foreground),
+          const SizedBox(width: 6),
+          Text(
+            label,
+            style: TextStyle(
+              fontSize: 13,
+              fontWeight: FontWeight.bold,
+              color: foreground,
+            ),
           ),
         ],
       ),
@@ -751,6 +936,9 @@ class _DriverHomeViewState extends State<DriverHomeView> {
     final pickedUp = students
         .where((s) => s.pickupStatus?.toUpperCase() == 'PICKED_UP')
         .length;
+    final droppedOff = students
+        .where((s) => s.pickupStatus?.toUpperCase() == 'DROPPED')
+        .length;
     final pending = students
         .where(
           (s) =>
@@ -770,7 +958,7 @@ class _DriverHomeViewState extends State<DriverHomeView> {
         mainAxisAlignment: MainAxisAlignment.spaceAround,
         children: [
           _buildSummaryStat(
-            'Trips',
+            'Routes',
             totalTrips.toString(),
             Icons.directions_bus_rounded,
           ),
@@ -783,6 +971,11 @@ class _DriverHomeViewState extends State<DriverHomeView> {
             'Picked Up',
             pickedUp.toString(),
             Icons.check_circle_rounded,
+          ),
+          _buildSummaryStat(
+            'Dropped',
+            droppedOff.toString(),
+            Icons.home_rounded,
           ),
           _buildSummaryStat(
             'Pending',
