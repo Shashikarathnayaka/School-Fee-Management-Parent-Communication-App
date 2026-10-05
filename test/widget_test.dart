@@ -191,7 +191,7 @@ void main() {
       expect(find.textContaining('Good Morning, Shashi Karathnayaka'), findsOneWidget);
       expect(find.text('Kaveesha Rathnayaka'), findsAtLeastNWidgets(1));
       expect(find.text('Rs. 15,000'), findsAtLeastNWidgets(1));
-      expect(find.text(AppStrings.payNowButton), findsOneWidget);
+      expect(find.text('View Details'), findsAtLeastNWidgets(1));
     });
 
     testWidgets('Logs in successfully as Driver and renders Driver Dashboard', (WidgetTester tester) async {

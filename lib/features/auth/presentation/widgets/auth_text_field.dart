@@ -11,6 +11,8 @@ class AuthTextField extends StatefulWidget {
   final TextInputAction textInputAction;
   final String? Function(String?)? validator;
   final ValueChanged<String>? onSubmitted;
+  final bool readOnly;
+  final bool enabled;
 
   const AuthTextField({
     super.key,
@@ -23,6 +25,8 @@ class AuthTextField extends StatefulWidget {
     this.textInputAction = TextInputAction.next,
     this.validator,
     this.onSubmitted,
+    this.readOnly = false,
+    this.enabled = true,
   });
 
   @override
@@ -54,6 +58,8 @@ class _AuthTextFieldState extends State<AuthTextField> {
         const SizedBox(height: 8),
         TextFormField(
           controller: widget.controller,
+          readOnly: widget.readOnly,
+          enabled: widget.enabled,
           obscureText: widget.isPassword && _obscureText,
           keyboardType: widget.keyboardType,
           textInputAction: widget.textInputAction,

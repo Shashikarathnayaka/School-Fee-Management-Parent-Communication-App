@@ -1,3 +1,5 @@
+import 'dart:async';
+
 import 'package:flutter/material.dart';
 import 'package:go_router/go_router.dart';
 
@@ -18,6 +20,50 @@ import '../../../home/presentation/widgets/quick_actions_grid.dart';
 import '../../../home/presentation/widgets/section_header.dart';
 import '../../domain/models/pickup_record.dart';
 
+/// Returns true when [now] (Sri Lanka local time) is before 12:00 noon.
+/// Pass a [DateTime] for testing; defaults to [nowInSriLanka] when null.
+bool isMorningNow([DateTime? now]) {
+  final t = now ?? nowInSriLanka;
+  return t.hour < 12;
+}
+
+/// Returns true when a manual route selection was made in a *different* period
+/// than the current one, i.e. the user picked in the morning but it is now
+/// afternoon (or vice-versa). When [manualPeriodIsMorning] is null there is no
+/// manual selection and this returns false.
+bool shouldResetManualSelection({
+  required bool? manualPeriodIsMorning,
+  required DateTime now,
+}) {
+  if (manualPeriodIsMorning == null) return false;
+  return manualPeriodIsMorning != isMorningNow(now);
+}
+
+/// Pure, unit-testable function to pick the default route ID for today.
+/// Before 12:00 (Sri Lanka time), it picks the first HOME_TO_SCHOOL route.
+/// From 12:00 on, it picks the first SCHOOL_TO_HOME route.
+/// Fallback: the first route in [routes], or null if [routes] is empty.
+String? pickDefaultRouteId(List<DriverRoute> routes, DateTime nowInSriLanka) {
+  if (routes.isEmpty) return null;
+  if (nowInSriLanka.hour < 12) {
+    for (final route in routes) {
+      if (route.direction == RouteDirection.homeToSchool) {
+        return route.id;
+      }
+    }
+  } else {
+    for (final route in routes) {
+      if (route.direction == RouteDirection.schoolToHome) {
+        return route.id;
+      }
+    }
+  }
+  return routes.first.id;
+}
+
+DateTime get nowInSriLanka =>
+    DateTime.now().toUtc().add(const Duration(hours: 5, minutes: 30));
+
 class DriverHomeView extends StatefulWidget {
   final AuthService authService;
   final DriverApiService? driverApiService;
@@ -32,7 +78,8 @@ class DriverHomeView extends StatefulWidget {
   State<DriverHomeView> createState() => _DriverHomeViewState();
 }
 
-class _DriverHomeViewState extends State<DriverHomeView> {
+class _DriverHomeViewState extends State<DriverHomeView>
+    with WidgetsBindingObserver {
   late final DriverApiService _driverApiService =
       widget.driverApiService ?? ServiceLocator.instance.driverApiService;
 
@@ -50,17 +97,77 @@ class _DriverHomeViewState extends State<DriverHomeView> {
   // ── Today's routes (drives both pickups list and summary card) ───────────
   List<DriverRoute> _todayRoutes = [];
   bool _isLoadingRoutes = true;
+  String? _selectedRouteId;
+  bool _hasManuallySelectedRoute = false;
+
+  /// Whether the manual selection was made during the morning period.
+  /// null means no manual selection exists.
+  bool? _manualPeriodIsMorning;
+
+  DriverRoute? get _selectedRoute {
+    if (_todayRoutes.isEmpty) return null;
+    final match = _todayRoutes.where((r) => r.id == _selectedRouteId);
+    return match.isNotEmpty ? match.first : _todayRoutes.first;
+  }
 
   // ── Notifications (drives the "Latest Updates" section) ─────────────────
   List<AppNotification> _notifications = [];
   bool _isLoadingNotifications = true;
 
+  // ── 60-second period-flip timer ──────────────────────────────────────────
+  Timer? _periodTimer;
+
+  /// Remembers the last known period so we can detect flips.
+  late bool _lastKnownIsMorning;
+
   @override
   void initState() {
     super.initState();
+    _lastKnownIsMorning = isMorningNow();
+    WidgetsBinding.instance.addObserver(this);
     _loadProfile();
     _loadTodayRoutes();
     _loadNotifications();
+
+    // Check every 60 seconds whether the period has flipped.
+    _periodTimer = Timer.periodic(const Duration(seconds: 60), (_) {
+      final nowMorning = isMorningNow();
+      if (nowMorning != _lastKnownIsMorning) {
+        _lastKnownIsMorning = nowMorning;
+        _loadTodayRoutes();
+        _loadNotifications();
+        if (!mounted) return;
+        ScaffoldMessenger.of(context).hideCurrentSnackBar();
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text(
+              nowMorning
+                  ? 'Morning rides are now available'
+                  : 'Evening rides are now available',
+            ),
+            behavior: SnackBarBehavior.floating,
+            shape: RoundedRectangleBorder(
+              borderRadius: BorderRadius.circular(10),
+            ),
+          ),
+        );
+      }
+    });
+  }
+
+  @override
+  void dispose() {
+    WidgetsBinding.instance.removeObserver(this);
+    _periodTimer?.cancel();
+    super.dispose();
+  }
+
+  @override
+  void didChangeAppLifecycleState(AppLifecycleState state) {
+    if (state == AppLifecycleState.resumed) {
+      _loadTodayRoutes();
+      _loadNotifications();
+    }
   }
 
   // ── Data loaders ─────────────────────────────────────────────────────────
@@ -92,6 +199,24 @@ class _DriverHomeViewState extends State<DriverHomeView> {
       setState(() {
         _todayRoutes = routes;
         _isLoadingRoutes = false;
+
+        // Reset manual selection when the period has changed since the user
+        // last tapped a chip.
+        final now = nowInSriLanka;
+        if (shouldResetManualSelection(
+          manualPeriodIsMorning: _manualPeriodIsMorning,
+          now: now,
+        )) {
+          _hasManuallySelectedRoute = false;
+          _manualPeriodIsMorning = null;
+        }
+
+        if (!_hasManuallySelectedRoute ||
+            !_todayRoutes.any((r) => r.id == _selectedRouteId)) {
+          _selectedRouteId = pickDefaultRouteId(_todayRoutes, now);
+          _hasManuallySelectedRoute = false;
+          _manualPeriodIsMorning = null;
+        }
       });
     } catch (_) {
       if (!mounted) return;
@@ -161,15 +286,6 @@ class _DriverHomeViewState extends State<DriverHomeView> {
   /// Student id currently being updated (disables that row's buttons).
   String? _updatingStudentId;
 
-  String? _routeIdForStudent(String studentId) {
-    for (final route in _todayRoutes) {
-      for (final s in route.students ?? <Student>[]) {
-        if (s.id == studentId) return route.id;
-      }
-    }
-    return null;
-  }
-
   void _showSnack(String message, {bool isError = false}) {
     if (!mounted) return;
     ScaffoldMessenger.of(context).hideCurrentSnackBar();
@@ -186,11 +302,11 @@ class _DriverHomeViewState extends State<DriverHomeView> {
   Future<void> _handlePickup(Student student, String status) async {
     if (_updatingStudentId != null) return;
 
-    final routeId = _routeIdForStudent(student.id);
-    if (routeId == null) {
+    if (_selectedRoute == null) {
       _showSnack('Could not find this student\'s route.', isError: true);
       return;
     }
+    final routeId = _selectedRoute!.id;
 
     setState(() => _updatingStudentId = student.id);
     try {
@@ -202,17 +318,21 @@ class _DriverHomeViewState extends State<DriverHomeView> {
       await _loadTodayRoutes();
 
       final chargeAmount = result.charge?.amount;
-      final chargeSuffix = (chargeAmount != null && chargeAmount > 0)
-          ? ' - Rs. ${chargeAmount % 1 == 0 ? chargeAmount.toInt() : chargeAmount.toStringAsFixed(2)} added'
-          : '';
+      final chargeFormatted = (chargeAmount != null && chargeAmount > 0)
+          ? (chargeAmount % 1 == 0
+              ? chargeAmount.toInt().toString()
+              : chargeAmount.toStringAsFixed(2))
+          : null;
 
       final String message;
       switch (status) {
         case 'PICKED_UP':
-          message = '${student.name} picked up$chargeSuffix';
+          message = '${student.name} picked up';
           break;
         case 'DROPPED':
-          message = '${student.name} dropped off$chargeSuffix';
+          message = (chargeFormatted != null)
+              ? '${student.name} dropped off - Rs. $chargeFormatted added to this month\'s fee'
+              : '${student.name} dropped off';
           break;
         case 'ABSENT':
           message = '${student.name} marked as absent.';
@@ -241,20 +361,6 @@ class _DriverHomeViewState extends State<DriverHomeView> {
   }
 
   // ── Derived data helpers ─────────────────────────────────────────────────
-
-  /// Flattens all students across today's routes, deduplicating by student id.
-  List<Student> get _allStudentsToday {
-    final seen = <String>{};
-    final result = <Student>[];
-    for (final route in _todayRoutes) {
-      for (final student in route.students ?? <Student>[]) {
-        if (seen.add(student.id)) {
-          result.add(student);
-        }
-      }
-    }
-    return result;
-  }
 
   /// Maps the raw `pickup_status` string from the backend to [PickupStatus].
   PickupStatus _toPickupStatus(String? raw) {
@@ -376,6 +482,16 @@ class _DriverHomeViewState extends State<DriverHomeView> {
               _buildDriverStatusCard(),
               const SizedBox(height: 20),
 
+              // ── Route selector chips (shown when > 1 route today) ──────────
+              if (!_isLoadingRoutes && _todayRoutes.length > 1) ...[
+                _buildRouteChips(),
+                const SizedBox(height: 12),
+              ],
+
+              // ── Missing-route hint card ────────────────────────────────────
+              if (!_isLoadingRoutes && _todayRoutes.isNotEmpty)
+                _buildMissingRouteHint(),
+
               // ── Today's Route Card (already wired — do not change) ─────────
               _buildTodayRouteCard(theme),
               const SizedBox(height: 24),
@@ -446,6 +562,114 @@ class _DriverHomeViewState extends State<DriverHomeView> {
               const SizedBox(height: 20),
             ],
           ),
+        ),
+      ),
+    );
+  }
+
+  // ── Route selector chips ──────────────────────────────────────────────────
+
+  Widget _buildRouteChips() {
+    return SingleChildScrollView(
+      scrollDirection: Axis.horizontal,
+      child: Row(
+        children: _todayRoutes.map((route) {
+          final isSelected = route.id == _selectedRoute?.id;
+          return Padding(
+            padding: const EdgeInsets.only(right: 8.0),
+            child: ChoiceChip(
+              label: Text('${route.direction.shortLabel} - ${route.name}'),
+              selected: isSelected,
+              selectedColor: AppColors.primaryBlueLight,
+              labelStyle: TextStyle(
+                color: isSelected
+                    ? AppColors.primaryBlue
+                    : AppColors.textSecondary,
+                fontWeight:
+                    isSelected ? FontWeight.bold : FontWeight.normal,
+                fontSize: 12,
+              ),
+              onSelected: (_) {
+                setState(() {
+                  _selectedRouteId = route.id;
+                  _hasManuallySelectedRoute = true;
+                  _manualPeriodIsMorning = isMorningNow();
+                });
+              },
+            ),
+          );
+        }).toList(),
+      ),
+    );
+  }
+
+  // ── Missing-route hint card ───────────────────────────────────────────────
+
+  /// Returns a hint card when the current period has no matching route.
+  /// Returns an empty [SizedBox] when everything is fine.
+  Widget _buildMissingRouteHint() {
+    final morning = isMorningNow();
+    final expectedDirection =
+        morning ? RouteDirection.homeToSchool : RouteDirection.schoolToHome;
+    final hasMatchingRoute =
+        _todayRoutes.any((r) => r.direction == expectedDirection);
+
+    if (hasMatchingRoute) return const SizedBox.shrink();
+
+    final periodLabel = morning ? 'morning' : 'evening';
+    final routeLabel = morning ? 'Home -> School' : 'School -> Home';
+    final message = morning
+        ? 'No morning route yet. Create a $routeLabel route to run the morning ride.'
+        : 'No evening route yet. Create a $routeLabel route to run the afternoon ride.';
+
+    return Padding(
+      padding: const EdgeInsets.only(bottom: 12),
+      child: Container(
+        padding: const EdgeInsets.all(14),
+        decoration: BoxDecoration(
+          color: AppColors.primaryBlueLight.withValues(alpha: 0.5),
+          borderRadius: BorderRadius.circular(12),
+          border: Border.all(
+            color: AppColors.primaryBlue.withValues(alpha: 0.25),
+          ),
+        ),
+        child: Row(
+          children: [
+            const Icon(
+              Icons.info_outline_rounded,
+              color: AppColors.primaryBlue,
+              size: 20,
+            ),
+            const SizedBox(width: 10),
+            Expanded(
+              child: Text(
+                message,
+                style: const TextStyle(
+                  fontSize: 13,
+                  color: AppColors.primaryNavy,
+                ),
+              ),
+            ),
+            const SizedBox(width: 8),
+            OutlinedButton(
+              key: Key('create_${periodLabel}_route_btn'),
+              onPressed: () => context.go(AppRoutes.driverRoute),
+              style: OutlinedButton.styleFrom(
+                minimumSize: const Size(0, 36),
+                foregroundColor: AppColors.primaryBlue,
+                side: const BorderSide(color: AppColors.primaryBlue),
+                padding: const EdgeInsets.symmetric(horizontal: 12),
+                shape: RoundedRectangleBorder(
+                  borderRadius: BorderRadius.circular(8),
+                ),
+                textStyle: const TextStyle(
+                  fontSize: 12,
+                  fontWeight: FontWeight.w600,
+                ),
+              ),
+              child: const Text('Create route'),
+            ),
+          ],
         ),
       ),
     );
@@ -573,7 +797,7 @@ class _DriverHomeViewState extends State<DriverHomeView> {
       );
     }
 
-    final students = _allStudentsToday;
+    final students = _selectedRoute?.students ?? <Student>[];
 
     if (students.isEmpty) {
       return Container(
@@ -614,12 +838,21 @@ class _DriverHomeViewState extends State<DriverHomeView> {
 
   Widget _buildPickupRow(Student student) {
     final status = _toPickupStatus(student.pickupStatus);
-    final timeHint = _todayRoutes.isNotEmpty
-        ? (_todayRoutes.first.startTime ?? '--:--')
-        : '--:--';
+    final timeHint = _selectedRoute?.startTime ?? '--:--';
 
     final isRowUpdating = _updatingStudentId == student.id;
     final isAnyUpdating = _updatingStudentId != null;
+
+    final isSchoolToHome = _selectedRoute?.direction == RouteDirection.schoolToHome;
+    final pickupLoc = (student.pickupLocation != null && student.pickupLocation!.trim().isNotEmpty)
+        ? student.pickupLocation!.trim()
+        : 'home';
+    final school = (student.schoolName != null && student.schoolName!.trim().isNotEmpty)
+        ? student.schoolName!.trim()
+        : 'school';
+    final legSubtitle = isSchoolToHome
+        ? 'Pick up: $school - Drop: $pickupLoc'
+        : 'Pick up: $pickupLoc - Drop: $school';
 
     return Container(
       padding: const EdgeInsets.all(14),
@@ -665,7 +898,7 @@ class _DriverHomeViewState extends State<DriverHomeView> {
                     ),
                     const SizedBox(height: 2),
                     Text(
-                      '${student.displayGrade} • ${student.pickupLocation ?? 'Pickup point not set'}',
+                      legSubtitle,
                       style: const TextStyle(
                         fontSize: 12,
                         color: AppColors.textSecondary,
@@ -930,8 +1163,8 @@ class _DriverHomeViewState extends State<DriverHomeView> {
       );
     }
 
-    final students = _allStudentsToday;
-    final totalTrips = _todayRoutes.length;
+    final selected = _selectedRoute;
+    final students = selected?.students ?? <Student>[];
     final totalStudents = students.length;
     final pickedUp = students
         .where((s) => s.pickupStatus?.toUpperCase() == 'PICKED_UP')
@@ -959,7 +1192,7 @@ class _DriverHomeViewState extends State<DriverHomeView> {
         children: [
           _buildSummaryStat(
             'Routes',
-            totalTrips.toString(),
+            selected != null ? '1' : '0',
             Icons.directions_bus_rounded,
           ),
           _buildSummaryStat(
@@ -1199,7 +1432,7 @@ class _DriverHomeViewState extends State<DriverHomeView> {
       );
     }
 
-    final route = _todayRoutes.first;
+    final route = _selectedRoute!;
     final startTime = route.startTime;
     final endTime = route.endTime;
     String timeDisplay;
@@ -1308,41 +1541,6 @@ class _DriverHomeViewState extends State<DriverHomeView> {
               ),
             ],
           ),
-          if (_todayRoutes.length > 1) ...[
-            const SizedBox(height: 12),
-            GestureDetector(
-              onTap: () => context.go(AppRoutes.driverRoute),
-              child: Container(
-                padding: const EdgeInsets.symmetric(
-                  horizontal: 10,
-                  vertical: 6,
-                ),
-                decoration: BoxDecoration(
-                  color: AppColors.primaryBlueLight,
-                  borderRadius: BorderRadius.circular(8),
-                ),
-                child: Row(
-                  mainAxisSize: MainAxisSize.min,
-                  children: [
-                    const Icon(
-                      Icons.alt_route_rounded,
-                      size: 14,
-                      color: AppColors.primaryBlue,
-                    ),
-                    const SizedBox(width: 6),
-                    Text(
-                      '+${_todayRoutes.length - 1} more ${_todayRoutes.length - 1 == 1 ? 'route' : 'routes'} today • View all',
-                      style: const TextStyle(
-                        fontSize: 12,
-                        fontWeight: FontWeight.bold,
-                        color: AppColors.primaryBlue,
-                      ),
-                    ),
-                  ],
-                ),
-              ),
-            ),
-          ],
         ],
       ),
     );

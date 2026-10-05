@@ -5,6 +5,7 @@ import '../../../../app/theme/app_colors.dart';
 import '../../../../core/constants/app_routes.dart';
 import '../../../../core/constants/app_strings.dart';
 import '../../../../core/models/driver_route.dart';
+import '../../../../core/models/student.dart';
 import '../../../../core/network/api_client.dart';
 import '../../../../core/services/auth_service.dart';
 import '../../../../core/services/driver_api_service.dart';
@@ -38,20 +39,37 @@ class _DriverRegisterStudentScreenState
   final _studentCodeController = TextEditingController();
   final _monthlyFeeController = TextEditingController();
 
-  late final DriverApiService _apiService = widget.driverApiService ??
-      (ServiceLocator.instance.driverApiService);
+  late final DriverApiService _apiService =
+      widget.driverApiService ?? (ServiceLocator.instance.driverApiService);
 
   List<DriverRoute> _routes = [];
   String? _selectedRouteId;
   bool _isLoadingRoutes = false;
   bool _isSubmitting = false;
+  bool _isLookingUpStudent = false;
+  StudentCodeLookupResult? _lookupResult;
+  bool _isFeeReadOnly = false;
+  String? _feeHelperMessage;
+
+  /// The code (trimmed, upper-cased) for which a successful lookup was last
+  /// performed. Used to decide when the code has truly changed so we know
+  /// when to clear the previous result.
+  String _lookedUpCode = '';
+
+  DriverRoute? get _selectedRoute {
+    try {
+      return _routes.firstWhere((r) => r.id == _selectedRouteId);
+    } catch (_) {
+      return null;
+    }
+  }
 
   /// Filters routes to those that can have students registered onto them.
   /// Any route that is not COMPLETED (e.g. SCHEDULED, ACTIVE, or unspecified) is valid.
   static List<DriverRoute> filterSelectableRoutes(List<DriverRoute> routes) {
     return routes.where((r) {
       final status = r.status?.toUpperCase();
-      return status != 'COMPLETED';
+      return status != 'COMPLETED' && status != 'ARCHIVED';
     }).toList();
   }
 
@@ -64,6 +82,7 @@ class _DriverRegisterStudentScreenState
     } else {
       _fetchRoutes();
     }
+    _studentCodeController.addListener(_onStudentCodeChanged);
   }
 
   void _initSelectedRoute() {
@@ -102,9 +121,28 @@ class _DriverRegisterStudentScreenState
 
   @override
   void dispose() {
+    _studentCodeController.removeListener(_onStudentCodeChanged);
     _studentCodeController.dispose();
     _monthlyFeeController.dispose();
     super.dispose();
+  }
+
+  /// Called whenever the student-code text field changes.
+  /// Clears the previous lookup result only when the typed code truly differs
+  /// from the code that was last looked up successfully.
+  void _onStudentCodeChanged() {
+    final currentCode = _studentCodeController.text.trim().toUpperCase();
+    if (currentCode == _lookedUpCode) return; // no real change
+    if (_lookupResult != null || _isFeeReadOnly) {
+      final wasLocked = _isFeeReadOnly;
+      setState(() {
+        _lookupResult = null;
+        _isFeeReadOnly = false;
+        _feeHelperMessage = null;
+        // Only drop the fee when it was auto-filled/locked for the old student.
+        if (wasLocked) _monthlyFeeController.clear();
+      });
+    }
   }
 
   String? _validateStudentCode(String? value) {
@@ -115,6 +153,7 @@ class _DriverRegisterStudentScreenState
   }
 
   String? _validateMonthlyFee(String? value) {
+    if (_isFeeReadOnly) return null;
     if (value == null || value.trim().isEmpty) {
       return AppStrings.reqMonthlyFee;
     }
@@ -123,6 +162,69 @@ class _DriverRegisterStudentScreenState
       return AppStrings.invalidMonthlyFee;
     }
     return null;
+  }
+
+  Future<void> _handleFindStudent() async {
+    final code = _studentCodeController.text.trim();
+    if (code.isEmpty) {
+      _showErrorSnackBar(AppStrings.reqStudentCode);
+      return;
+    }
+
+    FocusScope.of(context).unfocus();
+    setState(() {
+      _isLookingUpStudent = true;
+    });
+
+    try {
+      final result = await _apiService.lookupStudentByCode(code);
+      if (!mounted) return;
+
+      if (result == null) {
+        setState(() {
+          _isLookingUpStudent = false;
+          _lookupResult = null;
+        });
+        _showErrorSnackBar(AppStrings.studentNotFound);
+        return;
+      }
+
+      setState(() {
+        _isLookingUpStudent = false;
+        _lookupResult = result;
+        _lookedUpCode = code.trim().toUpperCase();
+        if (result.existingMonthlyFee != null) {
+          _isFeeReadOnly = true;
+          final fee = result.existingMonthlyFee!;
+          _monthlyFeeController.text = fee % 1 == 0
+              ? fee.toInt().toString()
+              : fee.toStringAsFixed(2);
+          final routeName = result.existingRoute?.name ?? 'existing route';
+          _feeHelperMessage =
+              'Monthly fee is already set for this student on your $routeName';
+        } else {
+          _isFeeReadOnly = false;
+          _feeHelperMessage = null;
+        }
+      });
+    } on ApiException catch (e) {
+      if (!mounted) return;
+      setState(() {
+        _isLookingUpStudent = false;
+        _lookupResult = null;
+      });
+      final msg = (e.statusCode == 404 || e.code == 'NOT_FOUND')
+          ? AppStrings.studentNotFound
+          : formatErrorMessage(e);
+      _showErrorSnackBar(msg);
+    } catch (e) {
+      if (!mounted) return;
+      setState(() {
+        _isLookingUpStudent = false;
+        _lookupResult = null;
+      });
+      _showErrorSnackBar(formatErrorMessage(e));
+    }
   }
 
   Future<void> _handleSubmit() async {
@@ -142,14 +244,21 @@ class _DriverRegisterStudentScreenState
     });
 
     final studentCode = _studentCodeController.text.trim();
-    final monthlyFee = double.parse(_monthlyFeeController.text.trim());
+    final double? monthlyFee =
+        !_isFeeReadOnly && _monthlyFeeController.text.trim().isNotEmpty
+        ? double.tryParse(_monthlyFeeController.text.trim())
+        : null;
 
     try {
-      await _apiService.addStudentToRoute(
-        _selectedRouteId!,
-        studentCode,
-        monthlyFee,
-      );
+      if (_isFeeReadOnly) {
+        await _apiService.addStudentToRoute(_selectedRouteId!, studentCode);
+      } else {
+        await _apiService.addStudentToRoute(
+          _selectedRouteId!,
+          studentCode,
+          monthlyFee,
+        );
+      }
 
       if (!mounted) return;
 
@@ -160,13 +269,20 @@ class _DriverRegisterStudentScreenState
       final assignedRouteName = _routes
           .firstWhere(
             (r) => r.id == _selectedRouteId,
-            orElse: () => DriverRoute(id: _selectedRouteId!, name: 'Current Route'),
+            orElse: () =>
+                DriverRoute(id: _selectedRouteId!, name: 'Current Route'),
           )
           .name;
 
+      final feeToDisplay = _isFeeReadOnly
+          ? (_lookupResult?.existingMonthlyFee ??
+                double.tryParse(_monthlyFeeController.text.trim()) ??
+                0.0)
+          : (monthlyFee ?? 0.0);
+
       _showSuccessDialog(
         studentCode: studentCode,
-        monthlyFee: monthlyFee,
+        monthlyFee: feeToDisplay,
         routeName: assignedRouteName,
       );
     } on ApiException catch (e) {
@@ -176,10 +292,17 @@ class _DriverRegisterStudentScreenState
       });
 
       final String message;
-      if (e.code == 'NOT_FOUND' || e.statusCode == 404) {
-        message = AppStrings.studentNotFound;
+      if (e.code == 'FEE_MISMATCH') {
+        message = e.message;
       } else if (e.code == 'CONFLICT' || e.statusCode == 409) {
-        message = AppStrings.studentConflict;
+        final dir =
+            (_lookupResult?.existingRoute?.direction ??
+                    _selectedRoute?.direction)
+                ?.label ??
+            'Home -> School';
+        message = 'This student is already on a $dir route';
+      } else if (e.code == 'NOT_FOUND' || e.statusCode == 404) {
+        message = AppStrings.studentNotFound;
       } else if (e.message.isNotEmpty && e.message != 'Something went wrong') {
         message = e.message;
       } else {
@@ -458,7 +581,10 @@ class _DriverRegisterStudentScreenState
             ),
             focusedBorder: OutlineInputBorder(
               borderRadius: BorderRadius.circular(12),
-              borderSide: const BorderSide(color: AppColors.primaryBlue, width: 1.5),
+              borderSide: const BorderSide(
+                color: AppColors.primaryBlue,
+                width: 1.5,
+              ),
             ),
             filled: true,
             fillColor: AppColors.surfaceWhite,
@@ -487,6 +613,67 @@ class _DriverRegisterStudentScreenState
     );
   }
 
+  Widget _buildStudentInfoCard(Student student) {
+    return Container(
+      margin: const EdgeInsets.only(top: 12),
+      padding: const EdgeInsets.all(14),
+      decoration: BoxDecoration(
+        color: AppColors.surfaceWhite,
+        borderRadius: BorderRadius.circular(12),
+        border: Border.all(color: AppColors.primaryBlue.withValues(alpha: 0.3)),
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Row(
+            children: [
+              const Icon(
+                Icons.person_rounded,
+                size: 20,
+                color: AppColors.primaryBlue,
+              ),
+              const SizedBox(width: 8),
+              Expanded(
+                child: Text(
+                  student.name,
+                  style: const TextStyle(
+                    fontSize: 15,
+                    fontWeight: FontWeight.bold,
+                    color: AppColors.primaryNavy,
+                  ),
+                ),
+              ),
+            ],
+          ),
+          const SizedBox(height: 8),
+          Text(
+            'Grade: ${student.displayGrade}',
+            style: const TextStyle(
+              fontSize: 13,
+              color: AppColors.textSecondary,
+            ),
+          ),
+          const SizedBox(height: 4),
+          Text(
+            'School: ${student.displaySchoolName}',
+            style: const TextStyle(
+              fontSize: 13,
+              color: AppColors.textSecondary,
+            ),
+          ),
+          const SizedBox(height: 4),
+          Text(
+            'Location: ${student.pickupLocation ?? 'Not set'}',
+            style: const TextStyle(
+              fontSize: 13,
+              color: AppColors.textSecondary,
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+
   @override
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
@@ -498,7 +685,10 @@ class _DriverRegisterStudentScreenState
           onTap: () => FocusScope.of(context).unfocus(),
           child: SingleChildScrollView(
             physics: const ClampingScrollPhysics(),
-            padding: const EdgeInsets.symmetric(horizontal: 24.0, vertical: 16.0),
+            padding: const EdgeInsets.symmetric(
+              horizontal: 24.0,
+              vertical: 16.0,
+            ),
             child: Form(
               key: _formKey,
               child: Column(
@@ -546,6 +736,47 @@ class _DriverRegisterStudentScreenState
                     textInputAction: TextInputAction.next,
                     validator: _validateStudentCode,
                   ),
+                  const SizedBox(height: 10),
+                  Align(
+                    alignment: Alignment.centerRight,
+                    child: SizedBox(
+                      height: 40,
+                      child: OutlinedButton.icon(
+                        key: const Key('find_student_button'),
+                        style: OutlinedButton.styleFrom(
+                          minimumSize: const Size(0, 40),
+                          foregroundColor: AppColors.primaryBlue,
+                          side: const BorderSide(color: AppColors.primaryBlue),
+                          shape: RoundedRectangleBorder(
+                            borderRadius: BorderRadius.circular(10),
+                          ),
+                          padding: const EdgeInsets.symmetric(horizontal: 14),
+                        ),
+                        onPressed: _isLookingUpStudent
+                            ? null
+                            : _handleFindStudent,
+                        icon: _isLookingUpStudent
+                            ? const SizedBox(
+                                width: 16,
+                                height: 16,
+                                child: CircularProgressIndicator(
+                                  strokeWidth: 2,
+                                  color: AppColors.primaryBlue,
+                                ),
+                              )
+                            : const Icon(Icons.search_rounded, size: 18),
+                        label: const Text(
+                          'Find student',
+                          style: TextStyle(
+                            fontWeight: FontWeight.w600,
+                            fontSize: 13,
+                          ),
+                        ),
+                      ),
+                    ),
+                  ),
+                  if (_lookupResult != null)
+                    _buildStudentInfoCard(_lookupResult!.student),
                   const SizedBox(height: 18),
 
                   // Monthly Transport Fee (Required)
@@ -554,12 +785,26 @@ class _DriverRegisterStudentScreenState
                     label: AppStrings.monthlyFeeLabel,
                     hintText: AppStrings.monthlyFeeHint,
                     prefixIcon: Icons.payments_outlined,
-                    keyboardType:
-                        const TextInputType.numberWithOptions(decimal: true),
+                    keyboardType: const TextInputType.numberWithOptions(
+                      decimal: true,
+                    ),
                     textInputAction: TextInputAction.done,
+                    readOnly: _isFeeReadOnly,
+                    enabled: !_isFeeReadOnly,
                     validator: _validateMonthlyFee,
                     onSubmitted: (_) => _handleSubmit(),
                   ),
+                  if (_feeHelperMessage != null) ...[
+                    const SizedBox(height: 6),
+                    Text(
+                      _feeHelperMessage!,
+                      style: const TextStyle(
+                        fontSize: 12,
+                        fontWeight: FontWeight.w500,
+                        color: AppColors.accentTeal,
+                      ),
+                    ),
+                  ],
                   const SizedBox(height: 32),
 
                   // Submit Button

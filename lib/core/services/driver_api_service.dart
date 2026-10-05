@@ -3,8 +3,11 @@ import '../models/driver_profile.dart';
 import '../models/driver_route.dart';
 import '../models/fee.dart';
 import '../models/notification_model.dart';
+import '../models/student_code_lookup_result.dart';
 import '../network/api_client.dart';
 import '../network/api_config.dart';
+
+export '../models/student_code_lookup_result.dart';
 
 class PickupCharge {
   final String? kind;
@@ -134,18 +137,57 @@ class DriverApiService {
     required String name,
     String? startTime,
     String? endTime,
+    RouteDirection direction = RouteDirection.homeToSchool,
   }) async {
     final body = {
       'name': name,
       if (startTime != null) 'start_time': startTime,
       if (endTime != null) 'end_time': endTime,
+      'direction': direction.value,
     };
 
     final response = await _apiClient.post(ApiConfig.driverRoutes, body: body);
     if (response != null) {
-      return DriverRoute.fromJson(response['route']);
+      final routeData = response['route'] ?? response;
+      if (routeData is Map) {
+        return DriverRoute.fromJson(Map<String, dynamic>.from(routeData));
+      }
     }
     return null;
+  }
+
+  Future<DriverRoute?> updateRoute({
+    required String routeId,
+    String? name,
+    String? startTime,
+    String? endTime,
+    RouteDirection? direction,
+  }) async {
+    final body = <String, dynamic>{};
+    if (name != null) body['name'] = name;
+    if (startTime != null) body['start_time'] = startTime;
+    if (endTime != null) body['end_time'] = endTime;
+    if (direction != null) body['direction'] = direction.value;
+
+    final response = await _apiClient.patch(
+      '${ApiConfig.driverRoutes}/$routeId',
+      body: body,
+    );
+    if (response != null) {
+      final routeData = response['route'] ?? response;
+      if (routeData is Map) {
+        return DriverRoute.fromJson(Map<String, dynamic>.from(routeData));
+      }
+    }
+    return null;
+  }
+
+  Future<void> deleteRoute(String routeId) async {
+    await _apiClient.delete('${ApiConfig.driverRoutes}/$routeId');
+  }
+
+  Future<void> archiveRoute(String routeId) async {
+    await _apiClient.patch('${ApiConfig.driverRoutes}/$routeId/archive');
   }
 
   Future<List<DriverRoute>> getTodayRoutes() async {
@@ -158,17 +200,26 @@ class DriverApiService {
     return [];
   }
 
+  Future<StudentCodeLookupResult?> lookupStudentByCode(String code) async {
+    final response = await _apiClient.get('${ApiConfig.driverStudentsByCode}/$code');
+    if (response is Map) {
+      return StudentCodeLookupResult.fromJson(Map<String, dynamic>.from(response));
+    }
+    return null;
+  }
+
   Future<void> addStudentToRoute(
     String routeId,
-    String studentCode,
-    double monthlyFee,
-  ) async {
+    String studentCode, [
+    double? monthlyFee,
+  ]) async {
+    final body = <String, dynamic>{
+      'student_code': studentCode,
+      if (monthlyFee != null) 'monthly_fee': monthlyFee,
+    };
     await _apiClient.post(
       '${ApiConfig.driverRoutes}/$routeId/students',
-      body: {
-        'student_code': studentCode,
-        'monthly_fee': monthlyFee,
-      },
+      body: body,
     );
   }
 

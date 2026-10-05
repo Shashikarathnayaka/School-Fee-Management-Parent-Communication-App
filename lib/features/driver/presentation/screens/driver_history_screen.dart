@@ -168,6 +168,24 @@ class _DriverHistoryScreenState extends State<DriverHistoryScreen> {
                   ),
                 ],
               ),
+              if (record.direction != null) ...[
+                const SizedBox(height: 4),
+                Container(
+                  padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 2),
+                  decoration: BoxDecoration(
+                    color: AppColors.primaryBlueLight,
+                    borderRadius: BorderRadius.circular(10),
+                  ),
+                  child: Text(
+                    record.direction!.label,
+                    style: const TextStyle(
+                      fontSize: 11,
+                      fontWeight: FontWeight.w600,
+                      color: AppColors.primaryBlue,
+                    ),
+                  ),
+                ),
+              ],
               if (record.time.isNotEmpty) ...[
                 const SizedBox(height: 4),
                 Text(

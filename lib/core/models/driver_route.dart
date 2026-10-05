@@ -1,5 +1,25 @@
 import 'student.dart';
 
+enum RouteDirection {
+  homeToSchool('HOME_TO_SCHOOL', 'Home -> School', 'Morning'),
+  schoolToHome('SCHOOL_TO_HOME', 'School -> Home', 'Evening');
+
+  final String value;
+  final String label;
+  final String shortLabel;
+
+  const RouteDirection(this.value, this.label, this.shortLabel);
+
+  static RouteDirection fromString(String? val) {
+    if (val == null) return RouteDirection.homeToSchool;
+    final upper = val.toUpperCase().trim();
+    if (upper == 'SCHOOL_TO_HOME' || upper == 'EVENING') {
+      return RouteDirection.schoolToHome;
+    }
+    return RouteDirection.homeToSchool;
+  }
+}
+
 class DriverRoute {
   final String id;
   final String name;
@@ -7,6 +27,7 @@ class DriverRoute {
   final String? endTime;
   final String? status;
   final List<Student>? students;
+  final RouteDirection direction;
 
   DriverRoute({
     required this.id,
@@ -15,6 +36,7 @@ class DriverRoute {
     this.endTime,
     this.status,
     this.students,
+    this.direction = RouteDirection.homeToSchool,
   });
 
   factory DriverRoute.fromJson(Map<String, dynamic> json) {
@@ -48,6 +70,21 @@ class DriverRoute {
       endTime: json['end_time']?.toString() ?? json['endTime']?.toString(),
       status: json['status']?.toString(),
       students: parsedStudents,
+      direction: RouteDirection.fromString(
+        json['direction']?.toString() ?? json['route_direction']?.toString(),
+      ),
     );
+  }
+
+  Map<String, dynamic> toJson() {
+    return {
+      'id': id,
+      'name': name,
+      if (startTime != null) 'start_time': startTime,
+      if (endTime != null) 'end_time': endTime,
+      if (status != null) 'status': status,
+      'direction': direction.value,
+      if (students != null) 'students': students!.map((s) => s.toJson()).toList(),
+    };
   }
 }

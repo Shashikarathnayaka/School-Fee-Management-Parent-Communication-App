@@ -102,10 +102,16 @@ class _DriverRouteScreenState extends State<DriverRouteScreen> {
   }
 
   void _showCreateRouteSheet() {
+    _showRouteSheet();
+  }
+
+  void _showRouteSheet({DriverRoute? routeToEdit}) {
     final formKey = GlobalKey<FormState>();
-    final nameController = TextEditingController();
-    final startTimeController = TextEditingController();
-    final endTimeController = TextEditingController();
+    final isEditing = routeToEdit != null;
+    final nameController = TextEditingController(text: routeToEdit?.name ?? '');
+    final startTimeController = TextEditingController(text: routeToEdit?.startTime ?? '');
+    final endTimeController = TextEditingController(text: routeToEdit?.endTime ?? '');
+    RouteDirection selectedDirection = routeToEdit?.direction ?? RouteDirection.homeToSchool;
 
     showModalBottomSheet(
       context: context,
@@ -150,9 +156,9 @@ class _DriverRouteScreenState extends State<DriverRouteScreen> {
                       Row(
                         mainAxisAlignment: MainAxisAlignment.spaceBetween,
                         children: [
-                          const Text(
-                            'Create New Route',
-                            style: TextStyle(
+                          Text(
+                            isEditing ? 'Edit route' : 'Create New Route',
+                            style: const TextStyle(
                               fontSize: 18,
                               fontWeight: FontWeight.bold,
                               color: AppColors.primaryNavy,
@@ -183,6 +189,45 @@ class _DriverRouteScreenState extends State<DriverRouteScreen> {
                       ),
                       const SizedBox(height: 16),
 
+                      // Direction Selector
+                      const Text(
+                        'Direction',
+                        style: TextStyle(
+                          fontSize: 14,
+                          fontWeight: FontWeight.w600,
+                          color: AppColors.primaryNavy,
+                        ),
+                      ),
+                      const SizedBox(height: 8),
+                      Row(
+                        children: [
+                          ChoiceChip(
+                            label: Text(RouteDirection.homeToSchool.label),
+                            selected: selectedDirection == RouteDirection.homeToSchool,
+                            onSelected: (selected) {
+                              if (selected) {
+                                setModalState(() {
+                                  selectedDirection = RouteDirection.homeToSchool;
+                                });
+                              }
+                            },
+                          ),
+                          const SizedBox(width: 8),
+                          ChoiceChip(
+                            label: Text(RouteDirection.schoolToHome.label),
+                            selected: selectedDirection == RouteDirection.schoolToHome,
+                            onSelected: (selected) {
+                              if (selected) {
+                                setModalState(() {
+                                  selectedDirection = RouteDirection.schoolToHome;
+                                });
+                              }
+                            },
+                          ),
+                        ],
+                      ),
+                      const SizedBox(height: 16),
+
                       // Start Time
                       AuthTextField(
                         controller: startTimeController,
@@ -205,8 +250,8 @@ class _DriverRouteScreenState extends State<DriverRouteScreen> {
 
                       // Submit button
                       AuthButton(
-                        text: 'Create Route',
-                        icon: Icons.add_road_rounded,
+                        text: isEditing ? 'Save Changes' : 'Create Route',
+                        icon: isEditing ? Icons.save_rounded : Icons.add_road_rounded,
                         isLoading: isSubmitting,
                         onPressed: isSubmitting
                             ? null
@@ -225,38 +270,56 @@ class _DriverRouteScreenState extends State<DriverRouteScreen> {
                                 final endTime = endTimeController.text.trim();
 
                                 try {
-                                  final newRoute = await _driverApiService.createRoute(
-                                    name: name,
-                                    startTime: startTime.isNotEmpty ? startTime : null,
-                                    endTime: endTime.isNotEmpty ? endTime : null,
-                                  );
+                                  if (isEditing) {
+                                    final updatedRoute = await _driverApiService.updateRoute(
+                                      routeId: routeToEdit.id,
+                                      name: name,
+                                      startTime: startTime.isNotEmpty ? startTime : null,
+                                      endTime: endTime.isNotEmpty ? endTime : null,
+                                      direction: selectedDirection,
+                                    );
 
-                                  if (newRoute == null) {
-                                    // createRoute() returned null — API call failed silently
-                                    // (no exception thrown, but no route was created).
                                     if (sheetContext.mounted) {
-                                      setModalState(() {
-                                        isSubmitting = false;
-                                      });
+                                      Navigator.of(sheetContext).pop();
                                     }
                                     if (!mounted) return;
+                                    await _loadRoutes(isRefresh: true);
+                                    if (!mounted) return;
                                     _showSnackBar(
-                                      "Couldn't create route. Please try again.",
-                                      isError: true,
+                                      'Route "${updatedRoute?.name ?? name}" updated successfully!',
                                     );
-                                    return;
-                                  }
+                                  } else {
+                                    final newRoute = await _driverApiService.createRoute(
+                                      name: name,
+                                      startTime: startTime.isNotEmpty ? startTime : null,
+                                      endTime: endTime.isNotEmpty ? endTime : null,
+                                      direction: selectedDirection,
+                                    );
 
-                                  // Success: close the sheet, refresh the list, then notify.
-                                  if (sheetContext.mounted) {
-                                    Navigator.of(sheetContext).pop();
+                                    if (newRoute == null) {
+                                      if (sheetContext.mounted) {
+                                        setModalState(() {
+                                          isSubmitting = false;
+                                        });
+                                      }
+                                      if (!mounted) return;
+                                      _showSnackBar(
+                                        "Couldn't create route. Please try again.",
+                                        isError: true,
+                                      );
+                                      return;
+                                    }
+
+                                    if (sheetContext.mounted) {
+                                      Navigator.of(sheetContext).pop();
+                                    }
+                                    if (!mounted) return;
+                                    await _loadRoutes(isRefresh: true);
+                                    if (!mounted) return;
+                                    _showSnackBar(
+                                      'Route "${newRoute.name}" created successfully!',
+                                    );
                                   }
-                                  if (!mounted) return;
-                                  await _loadRoutes(isRefresh: true);
-                                  if (!mounted) return;
-                                  _showSnackBar(
-                                    'Route "${newRoute.name}" created successfully!',
-                                  );
                                 } on ApiException catch (e) {
                                   if (sheetContext.mounted) {
                                     setModalState(() {
@@ -267,7 +330,7 @@ class _DriverRouteScreenState extends State<DriverRouteScreen> {
                                   _showSnackBar(
                                     e.message.isNotEmpty
                                         ? e.message
-                                        : "Failed to create route. Please try again.",
+                                        : "Failed to save route. Please try again.",
                                     isError: true,
                                   );
                                 } catch (_) {
@@ -278,7 +341,7 @@ class _DriverRouteScreenState extends State<DriverRouteScreen> {
                                   }
                                   if (!mounted) return;
                                   _showSnackBar(
-                                    "Failed to create route. Please try again.",
+                                    "Failed to save route. Please try again.",
                                     isError: true,
                                   );
                                 }
@@ -293,6 +356,95 @@ class _DriverRouteScreenState extends State<DriverRouteScreen> {
         );
       },
     );
+  }
+
+  Future<void> _confirmDeleteRoute(DriverRoute route) async {
+    final confirmed = await showDialog<bool>(
+      context: context,
+      builder: (dialogCtx) => AlertDialog(
+        title: const Text('Delete Route'),
+        content: Text('Are you sure you want to delete "${route.name}"?'),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.of(dialogCtx).pop(false),
+            child: const Text('Cancel'),
+          ),
+          ElevatedButton(
+            style: ElevatedButton.styleFrom(
+              minimumSize: const Size(0, 44),
+              backgroundColor: AppColors.error,
+              foregroundColor: AppColors.surfaceWhite,
+            ),
+            onPressed: () => Navigator.of(dialogCtx).pop(true),
+            child: const Text('Delete'),
+          ),
+        ],
+      ),
+    );
+
+    if (confirmed != true) return;
+
+    try {
+      await _driverApiService.deleteRoute(route.id);
+      if (!mounted) return;
+      await _loadRoutes(isRefresh: true);
+      if (!mounted) return;
+      _showSnackBar('Route "${route.name}" deleted successfully!');
+    } on ApiException catch (e) {
+      if (e.statusCode == 409 &&
+          (e.code == 'ROUTE_HAS_HISTORY' ||
+              e.message.contains('ROUTE_HAS_HISTORY') ||
+              e.message.contains('history'))) {
+        if (!mounted) return;
+        await _showArchiveDialog(route);
+      } else {
+        if (!mounted) return;
+        _showSnackBar(formatErrorMessage(e), isError: true);
+      }
+    } catch (e) {
+      if (!mounted) return;
+      _showSnackBar(formatErrorMessage(e), isError: true);
+    }
+  }
+
+  Future<void> _showArchiveDialog(DriverRoute route) async {
+    final shouldArchive = await showDialog<bool>(
+      context: context,
+      builder: (dialogCtx) => AlertDialog(
+        title: const Text('Route Has History'),
+        content: const Text(
+          'This route has pickup history and cannot be deleted. Archive it instead?',
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.of(dialogCtx).pop(false),
+            child: const Text('Cancel'),
+          ),
+          ElevatedButton(
+            style: ElevatedButton.styleFrom(
+              minimumSize: const Size(0, 44),
+              backgroundColor: AppColors.primaryBlue,
+              foregroundColor: AppColors.surfaceWhite,
+            ),
+            onPressed: () => Navigator.of(dialogCtx).pop(true),
+            child: const Text('Archive'),
+          ),
+        ],
+      ),
+    );
+
+    if (shouldArchive != true) return;
+
+    try {
+      await _driverApiService.archiveRoute(route.id);
+      if (!mounted) return;
+      await _loadRoutes(isRefresh: true);
+      if (!mounted) return;
+      _showSnackBar('Route "${route.name}" archived successfully!');
+    } catch (e) {
+      if (!mounted) return;
+      _showSnackBar(formatErrorMessage(e), isError: true);
+    }
   }
 
   Widget _buildRouteCard(ThemeData theme, DriverRoute route) {
@@ -325,17 +477,38 @@ class _DriverRouteScreenState extends State<DriverRouteScreen> {
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
             Row(
-              mainAxisAlignment: MainAxisAlignment.spaceBetween,
               children: [
                 Expanded(
-                  child: Text(
-                    route.name,
-                    style: theme.textTheme.titleMedium?.copyWith(
-                      fontWeight: FontWeight.bold,
-                      color: AppColors.primaryNavy,
-                    ),
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Text(
+                        route.name,
+                        style: theme.textTheme.titleMedium?.copyWith(
+                          fontWeight: FontWeight.bold,
+                          color: AppColors.primaryNavy,
+                        ),
+                      ),
+                      const SizedBox(height: 6),
+                      Container(
+                        padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
+                        decoration: BoxDecoration(
+                          color: AppColors.primaryBlueLight,
+                          borderRadius: BorderRadius.circular(12),
+                        ),
+                        child: Text(
+                          route.direction.label,
+                          style: const TextStyle(
+                            color: AppColors.primaryBlue,
+                            fontWeight: FontWeight.bold,
+                            fontSize: 11,
+                          ),
+                        ),
+                      ),
+                    ],
                   ),
                 ),
+                const SizedBox(width: 8),
                 Container(
                   padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
                   decoration: BoxDecoration(
@@ -350,6 +523,39 @@ class _DriverRouteScreenState extends State<DriverRouteScreen> {
                       fontSize: 12,
                     ),
                   ),
+                ),
+                PopupMenuButton<String>(
+                  icon: const Icon(Icons.more_vert_rounded, color: AppColors.textSecondary),
+                  tooltip: 'Route options',
+                  onSelected: (val) {
+                    if (val == 'edit') {
+                      _showRouteSheet(routeToEdit: route);
+                    } else if (val == 'delete') {
+                      _confirmDeleteRoute(route);
+                    }
+                  },
+                  itemBuilder: (ctx) => [
+                    const PopupMenuItem(
+                      value: 'edit',
+                      child: Row(
+                        children: [
+                          Icon(Icons.edit_outlined, size: 18, color: AppColors.primaryNavy),
+                          SizedBox(width: 8),
+                          Text('Edit route'),
+                        ],
+                      ),
+                    ),
+                    const PopupMenuItem(
+                      value: 'delete',
+                      child: Row(
+                        children: [
+                          Icon(Icons.delete_outline_rounded, size: 18, color: AppColors.error),
+                          SizedBox(width: 8),
+                          Text('Delete route', style: TextStyle(color: AppColors.error)),
+                        ],
+                      ),
+                    ),
+                  ],
                 ),
               ],
             ),

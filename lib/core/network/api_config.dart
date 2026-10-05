@@ -31,6 +31,7 @@ class ApiConfig {
   static const String driverHistory = '$baseUrl/driver/history';
   static const String driverNotifications = '$baseUrl/driver/notifications';
   static const String driverStudents = '$baseUrl/driver/students';
+  static const String driverStudentsByCode = '$baseUrl/driver/students/by-code';
   static const String driverFeesRemind = '$baseUrl/driver/fees/remind';
 
   // Admin Endpoints

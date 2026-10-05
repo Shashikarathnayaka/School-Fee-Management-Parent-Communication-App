@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 
+import '../../../../core/models/driver_route.dart';
 import '../../../home/domain/models/notification_item.dart';
 
 enum PickupStatus {
@@ -64,6 +65,7 @@ class PickupRecord {
   final String grade;
   final String pickupPoint;
   final PickupStatus status;
+  final RouteDirection? direction;
 
   const PickupRecord({
     required this.id,
@@ -72,6 +74,7 @@ class PickupRecord {
     required this.grade,
     required this.pickupPoint,
     required this.status,
+    this.direction,
   });
 
   factory PickupRecord.fromJson(Map<String, dynamic> json) {
@@ -137,6 +140,14 @@ class PickupRecord {
       }
     }
 
+    RouteDirection? direction;
+    final rawDir = json['direction'] ??
+        json['route_direction'] ??
+        (json['route'] is Map ? json['route']['direction'] : null);
+    if (rawDir != null) {
+      direction = RouteDirection.fromString(rawDir.toString());
+    }
+
     return PickupRecord(
       id: (json['id'] ?? json['_id'] ?? '').toString(),
       time: time,
@@ -144,6 +155,7 @@ class PickupRecord {
       grade: grade,
       pickupPoint: pickupPoint,
       status: status,
+      direction: direction,
     );
   }
 }

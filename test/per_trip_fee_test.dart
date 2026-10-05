@@ -472,7 +472,12 @@ void main() {
         );
 
         // Tap Send in dialog
-        await tester.tap(find.text('Send'));
+        await tester.tap(
+          find.descendant(
+            of: find.byType(AlertDialog),
+            matching: find.text('Send'),
+          ),
+        );
         await tester.pumpAndSettle();
 
         // Verify SnackBar with result is displayed

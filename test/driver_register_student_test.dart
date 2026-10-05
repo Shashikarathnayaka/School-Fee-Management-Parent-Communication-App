@@ -19,10 +19,14 @@ class MockDriverApiService extends DriverApiService {
   String? lastStudentCode;
   double? lastMonthlyFee;
   Exception? addStudentError;
+  StudentCodeLookupResult? mockLookupResult;
+  Exception? lookupError;
 
   MockDriverApiService({
     this.mockRoutes = const [],
     this.addStudentError,
+    this.mockLookupResult,
+    this.lookupError,
   }) : super(FakeApiClient());
 
   @override
@@ -31,11 +35,19 @@ class MockDriverApiService extends DriverApiService {
   }
 
   @override
+  Future<StudentCodeLookupResult?> lookupStudentByCode(String code) async {
+    if (lookupError != null) {
+      throw lookupError!;
+    }
+    return mockLookupResult;
+  }
+
+  @override
   Future<void> addStudentToRoute(
     String routeId,
-    String studentCode,
-    double monthlyFee,
-  ) async {
+    String studentCode, [
+    double? monthlyFee,
+  ]) async {
     addStudentCalled = true;
     lastRouteId = routeId;
     lastStudentCode = studentCode;
@@ -374,7 +386,115 @@ void main() {
       await tester.tap(find.byType(AuthButton));
       await tester.pumpAndSettle();
 
-      expect(find.text(AppStrings.studentConflict), findsOneWidget);
+      expect(
+        find.text('This student is already on a Home -> School route'),
+        findsOneWidget,
+      );
+    });
+
+    testWidgets('DriverRegisterStudentScreen displays FEE_MISMATCH error correctly',
+        (WidgetTester tester) async {
+      final mockApi = MockDriverApiService(
+        mockRoutes: [testRoute1],
+        addStudentError: ApiException(
+          message: 'Fee must match existing route fee of Rs. 3500.00',
+          code: 'FEE_MISMATCH',
+          statusCode: 409,
+        ),
+      );
+
+      await tester.pumpWidget(
+        MaterialApp(
+          home: DriverRegisterStudentScreen(
+            authService: mockAuthService,
+            driverApiService: mockApi,
+            initialRoutes: [testRoute1],
+          ),
+        ),
+      );
+
+      await tester.pumpAndSettle();
+
+      final textFields = find.byType(AuthTextField);
+      await tester.enterText(textFields.at(0), 'STU-101');
+      await tester.enterText(textFields.at(1), '5000');
+
+      await tester.tap(find.byType(AuthButton));
+      await tester.pumpAndSettle();
+
+      expect(
+        find.text('Fee must match existing route fee of Rs. 3500.00'),
+        findsOneWidget,
+      );
+    });
+
+    testWidgets('DriverRegisterStudentScreen prefills fee and marks it read-only when existing fee found',
+        (WidgetTester tester) async {
+      final lookupResult = StudentCodeLookupResult(
+        student: Student(
+          id: 'stu_99',
+          name: 'Janaka Perera',
+          grade: 'Grade 05',
+          section: 'A',
+          schoolName: 'St. Peter\'s College',
+          pickupLocation: 'Bambalapitiya',
+        ),
+        existingMonthlyFee: 3500.0,
+        existingRoute: StudentLookupRoute(
+          id: 'route_other',
+          name: 'Morning Route 1',
+          direction: RouteDirection.homeToSchool,
+        ),
+      );
+
+      final mockApi = MockDriverApiService(
+        mockRoutes: [testRoute1],
+        mockLookupResult: lookupResult,
+      );
+
+      await tester.pumpWidget(
+        MaterialApp(
+          home: DriverRegisterStudentScreen(
+            authService: mockAuthService,
+            driverApiService: mockApi,
+            initialRoutes: [testRoute1],
+          ),
+        ),
+      );
+
+      await tester.pumpAndSettle();
+
+      final textFields = find.byType(AuthTextField);
+      await tester.enterText(textFields.at(0), 'STU-99');
+
+      // Tap "Find student" button
+      await tester.tap(find.byKey(const Key('find_student_button')));
+      await tester.pumpAndSettle();
+
+      // Verify student details displayed
+      expect(find.text('Janaka Perera'), findsOneWidget);
+      expect(find.text('Grade: Grade 05 - A'), findsOneWidget);
+      expect(find.text('School: St. Peter\'s College'), findsOneWidget);
+
+      // Verify fee prefilled and helper message shown
+      expect(find.text('3500'), findsOneWidget);
+      expect(
+        find.text('Monthly fee is already set for this student on your Morning Route 1'),
+        findsOneWidget,
+      );
+
+      // Submit
+      await tester.tap(find.byType(AuthButton));
+      await tester.pumpAndSettle();
+
+      // When fee is read-only, addStudentToRoute is called without passing a fee (null)
+      expect(mockApi.addStudentCalled, isTrue);
+      expect(mockApi.lastRouteId, 'route_01');
+      expect(mockApi.lastStudentCode, 'STU-99');
+      expect(mockApi.lastMonthlyFee, isNull);
+
+      // Success dialog is displayed
+      expect(find.text(AppStrings.registerStudentSuccessTitle), findsOneWidget);
     });
 
     testWidgets('DriverRegisterStudentScreen accepts SCHEDULED and ACTIVE routes, excluding COMPLETED',
