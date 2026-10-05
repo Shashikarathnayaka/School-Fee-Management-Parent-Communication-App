@@ -50,7 +50,10 @@ class TestAuthService extends ChangeNotifier implements AuthService {
   Future<bool> checkAuthStatus() async => _isAuthenticated;
 
   @override
-  Future<bool> login({required String emailOrPhone, required String password}) async => true;
+  Future<bool> login({
+    required String emailOrPhone,
+    required String password,
+  }) async => true;
 
   @override
   Future<void> logout() async {
@@ -73,33 +76,36 @@ void main() {
       expect(UserRole.values.contains(UserRole.admin), isTrue);
     });
 
-    test('AuthUser correctly parses admin from roles array and role string', () {
-      final userFromArray = AuthUser.fromJson({
-        'id': 'admin_1',
-        'name': 'Admin User',
-        'email': 'admin@school.com',
-        'roles': ['ADMIN'],
-      });
+    test(
+      'AuthUser correctly parses admin from roles array and role string',
+      () {
+        final userFromArray = AuthUser.fromJson({
+          'id': 'admin_1',
+          'name': 'Admin User',
+          'email': 'admin@school.com',
+          'roles': ['ADMIN'],
+        });
 
-      expect(userFromArray.isAdmin, isTrue);
-      expect(userFromArray.isParent, isFalse);
-      expect(userFromArray.isDriver, isFalse);
-      expect(userFromArray.hasDualRole, isFalse);
+        expect(userFromArray.isAdmin, isTrue);
+        expect(userFromArray.isParent, isFalse);
+        expect(userFromArray.isDriver, isFalse);
+        expect(userFromArray.hasDualRole, isFalse);
 
-      final userFromString = AuthUser.fromJson({
-        'id': 'admin_2',
-        'name': 'Admin User 2',
-        'email': 'admin2@school.com',
-        'role': 'admin',
-      });
+        final userFromString = AuthUser.fromJson({
+          'id': 'admin_2',
+          'name': 'Admin User 2',
+          'email': 'admin2@school.com',
+          'role': 'admin',
+        });
 
-      expect(userFromString.isAdmin, isTrue);
-      expect(userFromString.isParent, isFalse);
-      expect(userFromString.isDriver, isFalse);
+        expect(userFromString.isAdmin, isTrue);
+        expect(userFromString.isParent, isFalse);
+        expect(userFromString.isDriver, isFalse);
 
-      final serialized = userFromArray.toJson();
-      expect(serialized['roles'], contains('admin'));
-    });
+        final serialized = userFromArray.toJson();
+        expect(serialized['roles'], contains('admin'));
+      },
+    );
 
     test('ApiConfig has all 5 admin endpoints configured', () {
       expect(ApiConfig.adminPickups, contains('/admin/pickups'));
@@ -109,17 +115,22 @@ void main() {
       expect(ApiConfig.adminRoutes, contains('/admin/routes'));
     });
 
-    test('AdminApiService calls GET /admin/routes and returns routes list', () async {
-      final mockClient = MockAdminApiClient(mockRoutesResponse: [
-        {'id': 'r1', 'name': 'Morning Route A'},
-        {'id': 'r2', 'name': 'Morning Route B'},
-      ]);
-      final service = AdminApiService(mockClient);
-      final routes = await service.getRoutes();
+    test(
+      'AdminApiService calls GET /admin/routes and returns routes list',
+      () async {
+        final mockClient = MockAdminApiClient(
+          mockRoutesResponse: [
+            {'id': 'r1', 'name': 'Morning Route A'},
+            {'id': 'r2', 'name': 'Morning Route B'},
+          ],
+        );
+        final service = AdminApiService(mockClient);
+        final routes = await service.getRoutes();
 
-      expect(routes.length, equals(2));
-      expect(routes[0]['name'], equals('Morning Route A'));
-    });
+        expect(routes.length, equals(2));
+        expect(routes[0]['name'], equals('Morning Route A'));
+      },
+    );
   });
 
   group('Admin Routing & Redirect Guard Tests', () {
@@ -135,99 +146,99 @@ void main() {
       studentListNotifier = StudentListNotifier(parentApiService);
     });
 
-    testWidgets('Admin user redirects to adminHome without modifying activeRoleNotifier',
-        (tester) async {
-      final adminUser = const AuthUser(
-        id: 'admin_01',
-        name: 'Super Admin',
-        email: 'admin@test.com',
-        roles: {UserRole.admin},
-      );
+    testWidgets(
+      'Admin user redirects to adminHome without modifying activeRoleNotifier',
+      (tester) async {
+        final adminUser = const AuthUser(
+          id: 'admin_01',
+          name: 'Super Admin',
+          email: 'admin@test.com',
+          roles: {UserRole.admin},
+        );
 
-      authService.setAuthenticatedUser(adminUser);
+        authService.setAuthenticatedUser(adminUser);
 
-      // activeRoleNotifier defaults to UserRole.parent
-      expect(activeRoleNotifier.value, equals(UserRole.parent));
+        // activeRoleNotifier defaults to UserRole.parent
+        expect(activeRoleNotifier.value, equals(UserRole.parent));
 
-      final router = AppRouter.createRouter(
-        authService,
-        activeRoleNotifier,
-        studentListNotifier,
-        parentApiService,
-      );
+        final router = AppRouter.createRouter(
+          authService,
+          activeRoleNotifier,
+          studentListNotifier,
+          parentApiService,
+        );
 
-      await tester.pumpWidget(MaterialApp.router(
-        routerConfig: router,
-      ));
-      await tester.pumpAndSettle();
+        await tester.pumpWidget(MaterialApp.router(routerConfig: router));
+        await tester.pumpAndSettle();
 
-      // Should be on Admin Dashboard
-      expect(find.text('Admin Dashboard'), findsOneWidget);
-      // activeRoleNotifier should NOT have been set or modified
-      expect(activeRoleNotifier.value, equals(UserRole.parent));
-    });
+        // Should be on Admin Dashboard
+        expect(find.text('Admin Dashboard'), findsOneWidget);
+        // activeRoleNotifier should NOT have been set or modified
+        expect(activeRoleNotifier.value, equals(UserRole.parent));
+      },
+    );
 
-    testWidgets('Authenticated admin landing on /home is redirected to /admin-home',
-        (tester) async {
-      final adminUser = const AuthUser(
-        id: 'admin_01',
-        name: 'Super Admin',
-        email: 'admin@test.com',
-        roles: {UserRole.admin},
-      );
+    testWidgets(
+      'Authenticated admin landing on /home is redirected to /admin-home',
+      (tester) async {
+        final adminUser = const AuthUser(
+          id: 'admin_01',
+          name: 'Super Admin',
+          email: 'admin@test.com',
+          roles: {UserRole.admin},
+        );
 
-      authService.setAuthenticatedUser(adminUser);
+        authService.setAuthenticatedUser(adminUser);
 
-      final router = AppRouter.createRouter(
-        authService,
-        activeRoleNotifier,
-        studentListNotifier,
-        parentApiService,
-      );
+        final router = AppRouter.createRouter(
+          authService,
+          activeRoleNotifier,
+          studentListNotifier,
+          parentApiService,
+        );
 
-      await tester.pumpWidget(MaterialApp.router(
-        routerConfig: router,
-      ));
-      await tester.pumpAndSettle();
+        await tester.pumpWidget(MaterialApp.router(routerConfig: router));
+        await tester.pumpAndSettle();
 
-      // Attempt to navigate to /home
-      router.go(AppRoutes.home);
-      await tester.pumpAndSettle();
+        // Attempt to navigate to /home
+        router.go(AppRoutes.home);
+        await tester.pumpAndSettle();
 
-      // Guard redirects back to Admin Dashboard
-      expect(find.text('Admin Dashboard'), findsOneWidget);
-    });
+        // Guard redirects back to Admin Dashboard
+        expect(find.text('Admin Dashboard'), findsOneWidget);
+      },
+    );
 
-    testWidgets('Non-admin user landing on /admin-home is redirected to /home',
-        (tester) async {
-      final parentUser = const AuthUser(
-        id: 'parent_01',
-        name: 'Parent User',
-        email: 'parent@test.com',
-        roles: {UserRole.parent},
-      );
+    testWidgets(
+      'Non-admin user landing on /admin-home is redirected to /home',
+      (tester) async {
+        final parentUser = const AuthUser(
+          id: 'parent_01',
+          name: 'Parent User',
+          email: 'parent@test.com',
+          roles: {UserRole.parent},
+        );
 
-      authService.setAuthenticatedUser(parentUser);
+        authService.setAuthenticatedUser(parentUser);
 
-      final router = AppRouter.createRouter(
-        authService,
-        activeRoleNotifier,
-        studentListNotifier,
-        parentApiService,
-      );
+        final router = AppRouter.createRouter(
+          authService,
+          activeRoleNotifier,
+          studentListNotifier,
+          parentApiService,
+        );
 
-      await tester.pumpWidget(MaterialApp.router(
-        routerConfig: router,
-      ));
-      await tester.pumpAndSettle();
+        await tester.pumpWidget(MaterialApp.router(routerConfig: router));
+        await tester.pumpAndSettle();
 
-      // Attempt to navigate to /admin-home
-      router.go(AppRoutes.adminHome);
-      await tester.pumpAndSettle();
+        // Attempt to navigate to /admin-home
+        router.go(AppRoutes.adminHome);
+        await tester.pumpAndSettle();
 
-      // Should NOT show Admin Dashboard, redirected to home
-      expect(find.text('Admin Dashboard'), findsNothing);
-    });
+        // Should NOT show Admin Dashboard, redirected to home
+        expect(find.text('Admin Dashboard'), findsNothing);
+      },
+    );
   });
 
   group('AdminHomeScreen Widget Tests', () {
@@ -235,18 +246,22 @@ void main() {
 
     setUp(() {
       authService = TestAuthService();
-      authService.setAuthenticatedUser(const AuthUser(
-        id: 'admin_1',
-        name: 'Admin',
-        email: 'admin@test.com',
-        roles: {UserRole.admin},
-      ));
+      authService.setAuthenticatedUser(
+        const AuthUser(
+          id: 'admin_1',
+          name: 'Admin',
+          email: 'admin@test.com',
+          roles: {UserRole.admin},
+        ),
+      );
     });
 
-    testWidgets('Renders AppBar and tabs: Pickups, Routes, History', (tester) async {
-      await tester.pumpWidget(MaterialApp(
-        home: AdminHomeScreen(authService: authService),
-      ));
+    testWidgets('Renders AppBar and tabs: Pickups, Routes, History', (
+      tester,
+    ) async {
+      await tester.pumpWidget(
+        MaterialApp(home: AdminHomeScreen(authService: authService)),
+      );
 
       expect(find.text('Admin Dashboard'), findsOneWidget);
       expect(find.text('Pickups'), findsOneWidget);
@@ -268,9 +283,9 @@ void main() {
     });
 
     testWidgets('Logout button opens confirmation dialog', (tester) async {
-      await tester.pumpWidget(MaterialApp(
-        home: AdminHomeScreen(authService: authService),
-      ));
+      await tester.pumpWidget(
+        MaterialApp(home: AdminHomeScreen(authService: authService)),
+      );
 
       final logoutButton = find.byIcon(Icons.logout_rounded);
       expect(logoutButton, findsOneWidget);
@@ -279,13 +294,19 @@ void main() {
       await tester.pumpAndSettle();
 
       expect(find.text('Sign Out'), findsWidgets);
-      expect(find.text('Are you sure you want to sign out of the Admin panel?'), findsOneWidget);
+      expect(
+        find.text('Are you sure you want to sign out of the Admin panel?'),
+        findsOneWidget,
+      );
       expect(find.text('Cancel'), findsOneWidget);
 
       // Tap cancel
       await tester.tap(find.text('Cancel'));
       await tester.pumpAndSettle();
-      expect(find.text('Are you sure you want to sign out of the Admin panel?'), findsNothing);
+      expect(
+        find.text('Are you sure you want to sign out of the Admin panel?'),
+        findsNothing,
+      );
       expect(authService.isAuthenticated, isTrue);
     });
   });
