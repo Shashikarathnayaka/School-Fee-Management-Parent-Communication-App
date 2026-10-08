@@ -110,6 +110,25 @@ class _DriverHomeViewState extends State<DriverHomeView>
     return match.isNotEmpty ? match.first : _todayRoutes.first;
   }
 
+  /// Returns true only when the selected route is live for the current period.
+  ///
+  /// Priority:
+  ///   1. `route.isActiveNow` — the server-supplied flag from `is_active_now`.
+  ///      Used when non-null so the app and server always agree.
+  ///   2. Local-clock fallback — compares route direction against the current
+  ///      Asia/Colombo hour when the server didn't include the field.
+  bool get _isSelectedRouteLive {
+    final route = _selectedRoute;
+    if (route == null) return false;
+    // Prefer the authoritative server flag when available.
+    if (route.isActiveNow != null) return route.isActiveNow!;
+    // Fallback: derive from the local clock (UTC+5:30).
+    final expectedDirection = isMorningNow()
+        ? RouteDirection.homeToSchool
+        : RouteDirection.schoolToHome;
+    return route.direction == expectedDirection;
+  }
+
   // ── Notifications (drives the "Latest Updates" section) ─────────────────
   List<AppNotification> _notifications = [];
   bool _isLoadingNotifications = true;
@@ -308,6 +327,22 @@ class _DriverHomeViewState extends State<DriverHomeView>
     }
     final routeId = _selectedRoute!.id;
 
+    // Guard: prevent pickup actions on the wrong time-period route.
+    // Wording is derived from the selected route's *direction* (not the local
+    // clock) so the message never contradicts the lock state when the server's
+    // is_active_now flag and the device clock disagree.
+    if (!_isSelectedRouteLive) {
+      final isMorningRoute =
+          _selectedRoute!.direction == RouteDirection.homeToSchool;
+      _showSnack(
+        isMorningRoute
+            ? 'Only the morning (Home -> School) route can be used before 12:00 PM.'
+            : 'Only the evening (School -> Home) route can be used from 12:00 PM.',
+        isError: true,
+      );
+      return;
+    }
+
     setState(() => _updatingStudentId = student.id);
     try {
       final result = await _driverApiService.updatePickupStatus(
@@ -344,7 +379,12 @@ class _DriverHomeViewState extends State<DriverHomeView>
       }
       _showSnack(message);
     } catch (e) {
-      if (e is ApiException &&
+      if (e is ApiException && e.code == 'WRONG_PERIOD') {
+        // Server confirmed the route is not live for this period.
+        // Show the server's message and refresh routes so the UI stays in sync.
+        _showSnack(e.message, isError: true);
+        await _loadTodayRoutes();
+      } else if (e is ApiException &&
           (e.code == 'PICKUP_REQUIRED' ||
               e.message.contains('PICKUP_REQUIRED') ||
               e.statusCode == 409)) {
@@ -951,6 +991,17 @@ class _DriverHomeViewState extends State<DriverHomeView>
     PickupStatus status,
     bool isAnyUpdating,
   ) {
+    // If this route is not live for the current period, replace every action
+    // with a muted lock banner — no pickup is possible until the period matches.
+    if (!_isSelectedRouteLive) {
+      return _buildStatusBanner(
+        icon: Icons.lock_clock_rounded,
+        label: status == PickupStatus.pending ? 'Not available now' : status.label,
+        background: AppColors.cardBorder.withValues(alpha: 0.4),
+        foreground: AppColors.textSecondary,
+      );
+    }
+
     switch (status) {
       case PickupStatus.pending:
         return Row(

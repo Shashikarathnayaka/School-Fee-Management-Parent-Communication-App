@@ -29,6 +29,12 @@ class DriverRoute {
   final List<Student>? students;
   final RouteDirection direction;
 
+  /// Server-supplied flag from `is_active_now`.
+  /// Non-null only when the backend includes the field in the response.
+  /// Null means the field was absent — callers should fall back to the
+  /// local-clock comparison.
+  final bool? isActiveNow;
+
   DriverRoute({
     required this.id,
     required this.name,
@@ -37,6 +43,7 @@ class DriverRoute {
     this.status,
     this.students,
     this.direction = RouteDirection.homeToSchool,
+    this.isActiveNow,
   });
 
   factory DriverRoute.fromJson(Map<String, dynamic> json) {
@@ -73,6 +80,11 @@ class DriverRoute {
       direction: RouteDirection.fromString(
         json['direction']?.toString() ?? json['route_direction']?.toString(),
       ),
+      // Only set when the backend explicitly sends a bool; null otherwise so
+      // the UI can fall back to the local-clock direction comparison.
+      isActiveNow: json['is_active_now'] is bool
+          ? json['is_active_now'] as bool
+          : null,
     );
   }
 

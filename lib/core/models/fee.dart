@@ -11,6 +11,7 @@ class Fee {
   final double? perTripAmount;
   final int? month;
   final int? year;
+  final int cycle;
 
   Fee({
     required this.id,
@@ -25,6 +26,7 @@ class Fee {
     this.perTripAmount,
     this.month,
     this.year,
+    this.cycle = 1,
   });
 
   static double _parseAmount(dynamic value) {
@@ -59,9 +61,7 @@ class Fee {
       amount: _parseAmount(json['amount']),
       status: (json['status'] ?? 'PENDING').toString(),
       dueDate: json['dueDate'] != null || json['due_date'] != null
-          ? DateTime.tryParse(
-              (json['dueDate'] ?? json['due_date']).toString(),
-            )
+          ? DateTime.tryParse((json['dueDate'] ?? json['due_date']).toString())
           : null,
       description: json['description']?.toString(),
       tripsCount: _parseInt(
@@ -77,6 +77,7 @@ class Fee {
       ),
       month: _parseNullableInt(json['month']),
       year: _parseNullableInt(json['year']),
+      cycle: _parseInt(json['cycle'], defaultValue: 1),
     );
   }
 
@@ -94,7 +95,7 @@ class Fee {
       if (perTripAmount != null) 'per_trip_amount': perTripAmount,
       if (month != null) 'month': month,
       if (year != null) 'year': year,
+      'cycle': cycle,
     };
   }
 }
-

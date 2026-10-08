@@ -220,17 +220,14 @@ class _ParentHomeViewState extends State<ParentHomeView>
     // Look for fee for this student for the current month and year
     Fee? studentFee;
     for (final f in _fees) {
-      if (f.studentId == student.id) {
-        if (f.month == now.month && (f.year == null || f.year == now.year)) {
-          studentFee = f;
-          break;
-        }
-        if (f.dueDate != null &&
-            f.dueDate!.month == now.month &&
-            f.dueDate!.year == now.year) {
-          studentFee = f;
-          break;
-        }
+      if (f.studentId != student.id) continue;
+      final matchesMonth =
+          (f.month == now.month && (f.year == null || f.year == now.year)) ||
+          (f.dueDate != null &&
+              f.dueDate!.month == now.month &&
+              f.dueDate!.year == now.year);
+      if (matchesMonth && (studentFee == null || f.cycle > studentFee.cycle)) {
+        studentFee = f;
       }
     }
 
@@ -324,8 +321,15 @@ class _ParentHomeViewState extends State<ParentHomeView>
       _fees = fees;
 
       // Filter non-PAID fees for upcoming
+      final nowDate = DateTime.now();
       final pendingFees = fees
           .where((f) => f.status.toUpperCase() != 'PAID')
+          .where(
+            (f) =>
+                !(f.cycle > 1 &&
+                    f.month == nowDate.month &&
+                    f.year == nowDate.year),
+          )
           .toList();
 
       pendingFees.sort((a, b) {
