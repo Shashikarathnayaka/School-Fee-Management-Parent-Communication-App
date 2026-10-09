@@ -1,3 +1,4 @@
+import 'package:flutter/foundation.dart';
 import '../../features/driver/domain/models/pickup_record.dart';
 import '../models/driver_profile.dart';
 import '../models/driver_route.dart';
@@ -97,15 +98,55 @@ class FeeReminderResult {
   }
 }
 
+class StartRouteResult {
+  final int notified;
+  final int skipped;
+
+  const StartRouteResult({this.notified = 0, this.skipped = 0});
+
+  factory StartRouteResult.fromJson(Map<String, dynamic> json) {
+    int parseInt(dynamic val) {
+      if (val == null) return 0;
+      if (val is num) return val.toInt();
+      return int.tryParse(val.toString()) ?? 0;
+    }
+
+    return StartRouteResult(
+      notified: parseInt(json['notified']),
+      skipped: parseInt(json['skipped']),
+    );
+  }
+
+  dynamic operator [](String key) {
+    switch (key) {
+      case 'notified':
+        return notified;
+      case 'skipped':
+        return skipped;
+      default:
+        return null;
+    }
+  }
+}
+
 class DriverApiService {
   final ApiClient _apiClient;
+
+  /// Holds the current duty status so it outlives widget rebuilds and tab transitions.
+  final ValueNotifier<bool> isOnDutyNotifier = ValueNotifier<bool>(false);
+
+  /// Tracks whether the duty status has been loaded from the server or set at least once.
+  bool hasLoadedDutyStatus = false;
 
   DriverApiService(this._apiClient);
 
   Future<DriverProfile?> getProfile() async {
     final response = await _apiClient.get(ApiConfig.driverProfile);
     if (response != null) {
-      return DriverProfile.fromJson(response['profile']);
+      final profile = DriverProfile.fromJson(response['profile']);
+      isOnDutyNotifier.value = profile.isOnDuty;
+      hasLoadedDutyStatus = true;
+      return profile;
     }
     return null;
   }
@@ -131,6 +172,8 @@ class DriverApiService {
 
   Future<void> toggleDutyStatus(bool isOnDuty) async {
     await _apiClient.patch(ApiConfig.driverStatus, body: {'is_on_duty': isOnDuty});
+    isOnDutyNotifier.value = isOnDuty;
+    hasLoadedDutyStatus = true;
   }
 
   Future<DriverRoute?> createRoute({
@@ -188,6 +231,21 @@ class DriverApiService {
 
   Future<void> archiveRoute(String routeId) async {
     await _apiClient.patch('${ApiConfig.driverRoutes}/$routeId/archive');
+  }
+
+  /// Starts a route, sending "Driver on the way" notifications to parents.
+  /// Returns [StartRouteResult] with the number of parents notified and skipped.
+  /// Throws [ApiException] on 409 NOT_ON_DUTY / INVALID_STATE or 404 NOT_FOUND.
+  Future<StartRouteResult> startRoute(String routeId) async {
+    final response = await _apiClient.post(
+      ApiConfig.driverRouteStart(routeId),
+    );
+    if (response is Map) {
+      return StartRouteResult.fromJson(
+        Map<String, dynamic>.from(response),
+      );
+    }
+    return const StartRouteResult();
   }
 
   Future<List<DriverRoute>> getTodayRoutes() async {
@@ -315,6 +373,14 @@ class DriverApiService {
 
   Future<void> readNotification(String id) async {
     await _apiClient.patch('${ApiConfig.driverNotifications}/$id/read');
+  }
+
+  Future<void> deleteNotification(String id) async {
+    await _apiClient.delete(ApiConfig.driverNotification(id));
+  }
+
+  Future<void> clearNotifications() async {
+    await _apiClient.delete(ApiConfig.driverNotifications);
   }
 
   Future<List<PickupRecord>> getHistory({String? date, String? routeId}) async {

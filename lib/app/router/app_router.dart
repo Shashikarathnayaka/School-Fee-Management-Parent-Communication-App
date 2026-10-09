@@ -115,6 +115,7 @@ abstract class AppRouter {
             parentApiService: parentApiService,
             driverApiService: driverApiService,
             studentListNotifier: studentListNotifier,
+            isOnDutyNotifier: driverApiService?.isOnDutyNotifier,
           ),
         ),
         GoRoute(

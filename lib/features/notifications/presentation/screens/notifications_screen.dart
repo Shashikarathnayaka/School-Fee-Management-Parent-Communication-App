@@ -1,3 +1,5 @@
+import 'dart:async';
+
 import 'package:flutter/material.dart';
 import 'package:go_router/go_router.dart';
 
@@ -46,16 +48,24 @@ class _NotificationsScreenState extends State<NotificationsScreen> {
   List<NotificationItem> _notifications = [];
   bool _isLoading = true;
   String? _errorMessage;
+  Timer? _autoRefreshTimer;
 
   @override
   void initState() {
     super.initState();
     widget.activeRoleNotifier.addListener(_onRoleChanged);
     _loadNotifications();
+    // Auto-refresh notifications every 30 seconds while screen is open.
+    _autoRefreshTimer = Timer.periodic(const Duration(seconds: 30), (_) {
+      if (mounted) {
+        _loadNotifications(isRefresh: true);
+      }
+    });
   }
 
   @override
   void dispose() {
+    _autoRefreshTimer?.cancel();
     widget.activeRoleNotifier.removeListener(_onRoleChanged);
     super.dispose();
   }
@@ -65,8 +75,22 @@ class _NotificationsScreenState extends State<NotificationsScreen> {
     _loadNotifications();
   }
 
-  static NotificationItem toNotificationItem(AppNotification n) =>
-      NotificationItem.fromNotification(n);
+  static NotificationItem toNotificationItem(AppNotification n) {
+    final isDriverOnTheWay =
+        n.title.toLowerCase().contains('driver on the way');
+    return NotificationItem(
+      id: n.id,
+      title: n.title,
+      message: n.message,
+      time: NotificationItem.formatTime(n.createdAt),
+      isRead: n.isRead,
+      icon: isDriverOnTheWay ? Icons.directions_bus_rounded : null,
+      iconColor: isDriverOnTheWay ? AppColors.accentTeal : null,
+      iconBackgroundColor: isDriverOnTheWay
+          ? AppColors.accentTeal.withValues(alpha: 0.12)
+          : null,
+    );
+  }
 
   NotificationItem _toNotificationItem(AppNotification n) =>
       toNotificationItem(n);
@@ -137,6 +161,147 @@ class _NotificationsScreenState extends State<NotificationsScreen> {
     }
   }
 
+  /// Validates deletion with API call before dismiss animation finishes.
+  Future<bool> _confirmDismissNotification(NotificationItem item) async {
+    try {
+      final isDriver = widget.activeRoleNotifier.value == UserRole.driver;
+      if (isDriver) {
+        await _driverApiService.deleteNotification(item.id);
+      } else {
+        await _parentApiService.deleteNotification(item.id);
+      }
+      return true;
+    } catch (_) {
+      if (mounted) {
+        ScaffoldMessenger.of(context).hideCurrentSnackBar();
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: const Text('Failed to delete notification. Please try again.'),
+            backgroundColor: AppColors.error,
+            behavior: SnackBarBehavior.floating,
+            shape: RoundedRectangleBorder(
+              borderRadius: BorderRadius.circular(10),
+            ),
+          ),
+        );
+      }
+      return false;
+    }
+  }
+
+  /// Called when the user successfully swipes away a notification row.
+  void _onNotificationDismissed(NotificationItem item) {
+    final index = _notifications.indexWhere((n) => n.id == item.id);
+    if (index != -1) {
+      setState(() {
+        _notifications.removeAt(index);
+      });
+    }
+
+    if (!mounted) return;
+    ScaffoldMessenger.of(context).hideCurrentSnackBar();
+    ScaffoldMessenger.of(context).showSnackBar(
+      SnackBar(
+        content: const Text('Notification deleted'),
+        behavior: SnackBarBehavior.floating,
+        shape: RoundedRectangleBorder(
+          borderRadius: BorderRadius.circular(10),
+        ),
+        duration: const Duration(seconds: 2),
+      ),
+    );
+  }
+
+  Future<void> _showClearAllDialog() async {
+    final confirmed = await showDialog<bool>(
+      context: context,
+      builder: (dialogCtx) => AlertDialog(
+        backgroundColor: AppColors.surfaceWhite,
+        shape: RoundedRectangleBorder(
+          borderRadius: BorderRadius.circular(20),
+        ),
+        title: const Text(
+          'Clear All Notifications?',
+          style: TextStyle(
+            color: AppColors.primaryNavy,
+            fontWeight: FontWeight.bold,
+          ),
+        ),
+        content: const Text(
+          'Are you sure you want to delete all notifications? This action cannot be undone.',
+          style: TextStyle(
+            color: AppColors.textSecondary,
+            fontSize: 14,
+          ),
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.of(dialogCtx).pop(false),
+            child: const Text('Cancel'),
+          ),
+          TextButton(
+            onPressed: () => Navigator.of(dialogCtx).pop(true),
+            style: TextButton.styleFrom(
+              foregroundColor: AppColors.error,
+            ),
+            child: const Text(
+              'Clear All',
+              style: TextStyle(fontWeight: FontWeight.bold),
+            ),
+          ),
+        ],
+      ),
+    );
+
+    if (confirmed == true) {
+      await _clearAllNotifications();
+    }
+  }
+
+  Future<void> _clearAllNotifications() async {
+    final previousList = List<NotificationItem>.from(_notifications);
+    setState(() {
+      _notifications.clear();
+    });
+
+    try {
+      final isDriver = widget.activeRoleNotifier.value == UserRole.driver;
+      if (isDriver) {
+        await _driverApiService.clearNotifications();
+      } else {
+        await _parentApiService.clearNotifications();
+      }
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).hideCurrentSnackBar();
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: const Text('All notifications cleared'),
+          behavior: SnackBarBehavior.floating,
+          shape: RoundedRectangleBorder(
+            borderRadius: BorderRadius.circular(10),
+          ),
+          duration: const Duration(seconds: 2),
+        ),
+      );
+    } catch (_) {
+      if (!mounted) return;
+      setState(() {
+        _notifications = previousList;
+      });
+      ScaffoldMessenger.of(context).hideCurrentSnackBar();
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: const Text('Failed to clear notifications. Please try again.'),
+          backgroundColor: AppColors.error,
+          behavior: SnackBarBehavior.floating,
+          shape: RoundedRectangleBorder(
+            borderRadius: BorderRadius.circular(10),
+          ),
+        ),
+      );
+    }
+  }
+
   void _onBottomNavTapped(BuildContext context, int index, bool isDriver) {
     if (isDriver) {
       switch (index) {
@@ -191,6 +356,18 @@ class _NotificationsScreenState extends State<NotificationsScreen> {
             fontWeight: FontWeight.bold,
           ),
         ),
+        actions: [
+          if (_notifications.isNotEmpty)
+            IconButton(
+              key: const Key('clear_all_notifications_btn'),
+              icon: const Icon(
+                Icons.delete_sweep_outlined,
+                color: AppColors.surfaceWhite,
+              ),
+              tooltip: 'Clear all',
+              onPressed: _showClearAllDialog,
+            ),
+        ],
       ),
       bottomNavigationBar: AppBottomNavBar(
         currentIndex: isDriver ? 3 : 2,
@@ -264,6 +441,8 @@ class _NotificationsScreenState extends State<NotificationsScreen> {
                   NotificationPreviewCard(
                     notifications: _notifications,
                     onItemTap: _onNotificationTap,
+                    confirmDismiss: _confirmDismissNotification,
+                    onItemDismissed: _onNotificationDismissed,
                   ),
               ],
             ),

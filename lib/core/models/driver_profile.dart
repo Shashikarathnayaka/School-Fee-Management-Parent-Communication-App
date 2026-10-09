@@ -18,14 +18,40 @@ class DriverProfile {
   });
 
   factory DriverProfile.fromJson(Map<String, dynamic> json) {
+    final driver = (json['driver'] is Map)
+        ? Map<String, dynamic>.from(json['driver'])
+        : const <String, dynamic>{};
+
+    final rawIsOnDuty = json['is_on_duty'] ??
+        json['isOnDuty'] ??
+        driver['is_on_duty'] ??
+        driver['isOnDuty'];
+
+    final bool parsedIsOnDuty;
+    if (rawIsOnDuty is bool) {
+      parsedIsOnDuty = rawIsOnDuty;
+    } else if (rawIsOnDuty is num) {
+      parsedIsOnDuty = rawIsOnDuty == 1;
+    } else if (rawIsOnDuty is String) {
+      parsedIsOnDuty = rawIsOnDuty.toLowerCase() == 'true';
+    } else {
+      parsedIsOnDuty = false;
+    }
+
     return DriverProfile(
       id: json['id'] ?? json['_id'] ?? '',
       name: json['name'] ?? '',
       email: json['email'],
       phone: json['phone'],
-      vanNumber: json['van_number'] ?? json['vanNumber'],
-      licenseNo: json['license_no'] ?? json['licenseNo'],
-      isOnDuty: json['is_on_duty'] ?? json['isOnDuty'] ?? false,
+      vanNumber: json['van_number'] ??
+          json['vanNumber'] ??
+          driver['van_number'] ??
+          driver['vanNumber'],
+      licenseNo: json['license_no'] ??
+          json['licenseNo'] ??
+          driver['license_no'] ??
+          driver['licenseNo'],
+      isOnDuty: parsedIsOnDuty,
     );
   }
 }

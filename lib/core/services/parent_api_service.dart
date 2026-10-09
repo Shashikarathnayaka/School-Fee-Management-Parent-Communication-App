@@ -109,4 +109,12 @@ class ParentApiService {
   Future<void> readNotification(String id) async {
     await _apiClient?.patch('${ApiConfig.parentNotifications}/$id/read');
   }
+
+  Future<void> deleteNotification(String id) async {
+    await _apiClient?.delete(ApiConfig.parentNotification(id));
+  }
+
+  Future<void> clearNotifications() async {
+    await _apiClient?.delete(ApiConfig.parentNotifications);
+  }
 }

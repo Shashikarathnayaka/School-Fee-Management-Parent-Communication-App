@@ -1,5 +1,5 @@
 abstract class AppStrings {
-  static const String appName = 'N&D Smart SchoolPay';
+  static const String appName = 'Go School';
   static const String appTagline = 'Smart School Fee Management';
 
   // Splash
@@ -7,7 +7,7 @@ abstract class AppStrings {
 
   // Login
   static const String welcomeBack = 'Welcome Back';
-  static const String signInSubtitle = 'Sign in to continue to Smart SchoolPay';
+  static const String signInSubtitle = 'Sign in to continue to Go School';
   static const String emailOrPhoneLabel = 'Email or Mobile Number';
   static const String emailOrPhoneHint = 'Enter email or phone number';
   static const String passwordLabel = 'Password';

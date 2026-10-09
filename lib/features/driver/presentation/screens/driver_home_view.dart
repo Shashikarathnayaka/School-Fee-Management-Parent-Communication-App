@@ -67,11 +67,13 @@ DateTime get nowInSriLanka =>
 class DriverHomeView extends StatefulWidget {
   final AuthService authService;
   final DriverApiService? driverApiService;
+  final ValueNotifier<bool>? isOnDutyNotifier;
 
   const DriverHomeView({
     super.key,
     required this.authService,
     this.driverApiService,
+    this.isOnDutyNotifier,
   });
 
   @override
@@ -83,6 +85,9 @@ class _DriverHomeViewState extends State<DriverHomeView>
   late final DriverApiService _driverApiService =
       widget.driverApiService ?? ServiceLocator.instance.driverApiService;
 
+  late final ValueNotifier<bool> _dutyNotifier =
+      widget.isOnDutyNotifier ?? _driverApiService.isOnDutyNotifier;
+
   // ── Profile / duty status ────────────────────────────────────────────────
   DriverProfile? _profile;
   bool _isLoadingProfile = true;
@@ -91,8 +96,12 @@ class _DriverHomeViewState extends State<DriverHomeView>
   bool _isTogglingDuty = false;
 
   /// The authoritative on-duty flag shown in the UI.
-  /// Seeded from [_profile.isOnDuty] once the profile loads.
-  bool _isOnDuty = false;
+  /// Initialised immediately in initState from the shared duty notifier,
+  /// updated after successful toggleDutyStatus and when _loadProfile returns.
+  late bool _isOnDuty;
+
+  /// Tracks whether the duty state has been loaded from the server or set by a prior action.
+  late bool _isDutyStatusKnown;
 
   // ── Today's routes (drives both pickups list and summary card) ───────────
   List<DriverRoute> _todayRoutes = [];
@@ -103,6 +112,9 @@ class _DriverHomeViewState extends State<DriverHomeView>
   /// Whether the manual selection was made during the morning period.
   /// null means no manual selection exists.
   bool? _manualPeriodIsMorning;
+
+  /// Route ID currently being started (drives per-button spinner in the sheet).
+  String? _startingRouteId;
 
   DriverRoute? get _selectedRoute {
     if (_todayRoutes.isEmpty) return null;
@@ -142,6 +154,9 @@ class _DriverHomeViewState extends State<DriverHomeView>
   @override
   void initState() {
     super.initState();
+    _isOnDuty = _dutyNotifier.value;
+    _isDutyStatusKnown = _driverApiService.hasLoadedDutyStatus;
+    _dutyNotifier.addListener(_onDutyNotifierChanged);
     _lastKnownIsMorning = isMorningNow();
     WidgetsBinding.instance.addObserver(this);
     _loadProfile();
@@ -174,16 +189,27 @@ class _DriverHomeViewState extends State<DriverHomeView>
     });
   }
 
+  void _onDutyNotifierChanged() {
+    if (mounted && _isOnDuty != _dutyNotifier.value) {
+      setState(() {
+        _isOnDuty = _dutyNotifier.value;
+        _isDutyStatusKnown = true;
+      });
+    }
+  }
+
   @override
   void dispose() {
     WidgetsBinding.instance.removeObserver(this);
     _periodTimer?.cancel();
+    _dutyNotifier.removeListener(_onDutyNotifierChanged);
     super.dispose();
   }
 
   @override
   void didChangeAppLifecycleState(AppLifecycleState state) {
     if (state == AppLifecycleState.resumed) {
+      _loadProfile();
       _loadTodayRoutes();
       _loadNotifications();
     }
@@ -200,6 +226,9 @@ class _DriverHomeViewState extends State<DriverHomeView>
         // Seed the duty toggle from the real server value.
         if (profile != null) {
           _isOnDuty = profile.isOnDuty;
+          _dutyNotifier.value = profile.isOnDuty;
+          _isDutyStatusKnown = true;
+          _driverApiService.hasLoadedDutyStatus = true;
         }
         _isLoadingProfile = false;
       });
@@ -207,6 +236,7 @@ class _DriverHomeViewState extends State<DriverHomeView>
       if (!mounted) return;
       setState(() {
         _isLoadingProfile = false;
+        _isDutyStatusKnown = true;
       });
     }
   }
@@ -267,24 +297,40 @@ class _DriverHomeViewState extends State<DriverHomeView>
     if (_isTogglingDuty) return;
 
     final newStatus = !_isOnDuty;
+    final previousStatus = _isOnDuty;
 
     // Optimistically update the UI, but track it so we can roll back.
     setState(() {
       _isTogglingDuty = true;
       _isOnDuty = newStatus;
+      _isDutyStatusKnown = true;
     });
+    _dutyNotifier.value = newStatus;
+    _driverApiService.hasLoadedDutyStatus = true;
 
     try {
       await _driverApiService.toggleDutyStatus(newStatus);
+      _dutyNotifier.value = newStatus;
       if (!mounted) return;
       setState(() {
         _isTogglingDuty = false;
       });
+
+      if (newStatus) {
+        // Going on-duty: refresh routes then offer to start one.
+        await _loadTodayRoutes();
+        if (!mounted) return;
+        _showStartRouteSheet();
+      } else {
+        // Going offline: refresh routes so the UI reflects any server changes.
+        _loadTodayRoutes();
+      }
     } catch (_) {
       // Roll back on failure and inform the user.
+      _dutyNotifier.value = previousStatus;
       if (!mounted) return;
       setState(() {
-        _isOnDuty = !newStatus;
+        _isOnDuty = previousStatus;
         _isTogglingDuty = false;
       });
       ScaffoldMessenger.of(context).hideCurrentSnackBar();
@@ -298,6 +344,98 @@ class _DriverHomeViewState extends State<DriverHomeView>
           ),
         ),
       );
+    }
+  }
+
+  // ── Start Route sheet ─────────────────────────────────────────────────────
+
+  /// Opens the "Select route to start" bottom sheet.
+  /// If there are no today routes, falls back to the create-route hint
+  /// (routes card already shows it, so we just do nothing here).
+  void _showStartRouteSheet() {
+    if (_todayRoutes.isEmpty) return;
+
+    showModalBottomSheet<void>(
+      context: context,
+      isScrollControlled: true,
+      backgroundColor: Colors.transparent,
+      builder: (sheetCtx) {
+        return StatefulBuilder(
+          builder: (context, setSheetState) {
+            return _StartRouteSheet(
+              routes: _todayRoutes,
+              onStart: (route) =>
+                  _handleStartRoute(route, sheetCtx, setSheetState),
+              onDismiss: () => Navigator.of(sheetCtx).pop(),
+              startingRouteId: _startingRouteId,
+            );
+          },
+        );
+      },
+    ).then((_) {
+      // Sheet dismissed — reset any lingering in-flight state.
+      if (mounted && _startingRouteId != null) {
+        setState(() => _startingRouteId = null);
+      }
+    });
+  }
+
+  Future<void> _handleStartRoute(
+    DriverRoute route,
+    BuildContext sheetCtx,
+    void Function(void Function()) setSheetState,
+  ) async {
+    if (_startingRouteId != null) return;
+
+    setSheetState(() => _startingRouteId = route.id);
+    if (mounted) setState(() => _startingRouteId = route.id);
+
+    try {
+      final result = await _driverApiService.startRoute(route.id);
+
+      if (!mounted) return;
+
+      // Persist selection and refresh.
+      setState(() {
+        _selectedRouteId = route.id;
+        _hasManuallySelectedRoute = true;
+        _manualPeriodIsMorning = isMorningNow();
+        _startingRouteId = null;
+      });
+      await _loadTodayRoutes();
+
+      // Close the sheet only after success.
+      if (sheetCtx.mounted) Navigator.of(sheetCtx).pop();
+
+      _showSnack(
+        'Route started. ${result.notified} ${result.notified == 1 ? 'parent' : 'parents'} notified.',
+      );
+    } on ApiException catch (e) {
+      if (sheetCtx.mounted) {
+        setSheetState(() => _startingRouteId = null);
+      }
+      if (mounted) setState(() => _startingRouteId = null);
+      // Keep the sheet open so the driver can retry or choose a different route.
+      _showSnack(_friendlyStartError(e), isError: true);
+    } catch (e) {
+      if (sheetCtx.mounted) {
+        setSheetState(() => _startingRouteId = null);
+      }
+      if (mounted) setState(() => _startingRouteId = null);
+      _showSnack(formatErrorMessage(e), isError: true);
+    }
+  }
+
+  String _friendlyStartError(ApiException e) {
+    switch (e.code) {
+      case 'NOT_ON_DUTY':
+        return 'You must be on duty before starting a route.';
+      case 'INVALID_STATE':
+        return 'This route cannot be started in its current state.';
+      case 'NOT_FOUND':
+        return 'Route not found. Please refresh and try again.';
+      default:
+        return e.message;
     }
   }
   // ── Pickup actions ───────────────────────────────────────────────────────
@@ -511,7 +649,7 @@ class _DriverHomeViewState extends State<DriverHomeView>
               ),
               const SizedBox(height: 4),
               Text(
-                'Welcome to N&D Smart SchoolPay',
+                'Welcome to Go School',
                 style: theme.textTheme.bodyMedium?.copyWith(
                   color: AppColors.textSecondary,
                 ),
@@ -718,6 +856,8 @@ class _DriverHomeViewState extends State<DriverHomeView>
   // ── Section builders ──────────────────────────────────────────────────────
 
   Widget _buildDriverStatusCard() {
+    final isUnknown = _isLoadingProfile && !_isDutyStatusKnown;
+
     return Container(
       padding: const EdgeInsets.all(16),
       decoration: BoxDecoration(
@@ -727,13 +867,13 @@ class _DriverHomeViewState extends State<DriverHomeView>
       ),
       child: Row(
         children: [
-          // Animated status dot: dim while profile is still loading.
+          // Animated status dot: dim while profile is still loading and duty state is unknown.
           Container(
             width: 12,
             height: 12,
             decoration: BoxDecoration(
               shape: BoxShape.circle,
-              color: _isLoadingProfile
+              color: isUnknown
                   ? AppColors.textSecondary
                   : (_isOnDuty ? AppColors.success : AppColors.error),
             ),
@@ -751,7 +891,7 @@ class _DriverHomeViewState extends State<DriverHomeView>
                   ),
                 ),
                 const SizedBox(height: 2),
-                _isLoadingProfile
+                isUnknown
                     ? const SizedBox(
                         height: 16,
                         width: 80,
@@ -773,7 +913,8 @@ class _DriverHomeViewState extends State<DriverHomeView>
               ],
             ),
           ),
-          // Toggle button — shows a spinner while the API call is in-flight.
+          // Toggle button — shows a spinner while the API call is in-flight,
+          // or a loading state while duty state is still unknown.
           _isTogglingDuty
               ? const SizedBox(
                   width: 24,
@@ -783,33 +924,69 @@ class _DriverHomeViewState extends State<DriverHomeView>
                     color: AppColors.primaryBlue,
                   ),
                 )
-              : GestureDetector(
-                  onTap: _isLoadingProfile ? null : _handleDutyToggle,
-                  child: Container(
-                    padding: const EdgeInsets.symmetric(
-                      horizontal: 14,
-                      vertical: 8,
-                    ),
-                    decoration: BoxDecoration(
-                      border: Border.all(
-                        color: _isOnDuty
-                            ? AppColors.error
-                            : AppColors.primaryBlue,
+              : isUnknown
+                  ? Container(
+                      padding: const EdgeInsets.symmetric(
+                        horizontal: 14,
+                        vertical: 8,
                       ),
-                      borderRadius: BorderRadius.circular(10),
-                    ),
-                    child: Text(
-                      _isOnDuty ? 'Go Offline' : 'Go On Duty',
-                      style: TextStyle(
-                        fontWeight: FontWeight.bold,
-                        fontSize: 13,
-                        color: _isOnDuty
-                            ? AppColors.error
-                            : AppColors.primaryBlue,
+                      decoration: BoxDecoration(
+                        border: Border.all(
+                          color: AppColors.cardBorder,
+                        ),
+                        borderRadius: BorderRadius.circular(10),
+                        color: AppColors.cardBorder.withValues(alpha: 0.2),
+                      ),
+                      child: const Row(
+                        mainAxisSize: MainAxisSize.min,
+                        children: [
+                          SizedBox(
+                            width: 12,
+                            height: 12,
+                            child: CircularProgressIndicator(
+                              strokeWidth: 2,
+                              color: AppColors.textMuted,
+                            ),
+                          ),
+                          SizedBox(width: 6),
+                          Text(
+                            'Loading...',
+                            style: TextStyle(
+                              fontWeight: FontWeight.bold,
+                              fontSize: 13,
+                              color: AppColors.textMuted,
+                            ),
+                          ),
+                        ],
+                      ),
+                    )
+                  : GestureDetector(
+                      onTap: _handleDutyToggle,
+                      child: Container(
+                        padding: const EdgeInsets.symmetric(
+                          horizontal: 14,
+                          vertical: 8,
+                        ),
+                        decoration: BoxDecoration(
+                          border: Border.all(
+                            color: _isOnDuty
+                                ? AppColors.error
+                                : AppColors.primaryBlue,
+                          ),
+                          borderRadius: BorderRadius.circular(10),
+                        ),
+                        child: Text(
+                          _isOnDuty ? 'Go Offline' : 'Go On Duty',
+                          style: TextStyle(
+                            fontWeight: FontWeight.bold,
+                            fontSize: 13,
+                            color: _isOnDuty
+                                ? AppColors.error
+                                : AppColors.primaryBlue,
+                          ),
+                        ),
                       ),
                     ),
-                  ),
-                ),
         ],
       ),
     );
@@ -1591,6 +1768,272 @@ class _DriverHomeViewState extends State<DriverHomeView>
                 ),
               ),
             ],
+          ),
+          // "Start Route" button — visible when the driver is on duty.
+          if (_isOnDuty) ...[
+            const SizedBox(height: 12),
+            SizedBox(
+              width: double.infinity,
+              child: ElevatedButton.icon(
+                key: const Key('start_route_btn'),
+                onPressed: _showStartRouteSheet,
+                icon: const Icon(Icons.play_circle_outline_rounded, size: 18),
+                label: const Text('Start Route'),
+                style: ElevatedButton.styleFrom(
+                  minimumSize: const Size(0, 44),
+                  backgroundColor: AppColors.accentTeal,
+                  foregroundColor: AppColors.surfaceWhite,
+                  textStyle: const TextStyle(
+                    fontSize: 14,
+                    fontWeight: FontWeight.w600,
+                  ),
+                  shape: RoundedRectangleBorder(
+                    borderRadius: BorderRadius.circular(10),
+                  ),
+                ),
+              ),
+            ),
+          ],
+        ],
+      ),
+    );
+  }
+}
+
+// ── _StartRouteSheet ──────────────────────────────────────────────────────────
+
+/// Stateful wrapper so the sheet can rebuild when [startingRouteId] changes
+/// without closing and reopening.
+class _StartRouteSheet extends StatelessWidget {
+  final List<DriverRoute> routes;
+  final void Function(DriverRoute route) onStart;
+  final VoidCallback onDismiss;
+  final String? startingRouteId;
+
+  const _StartRouteSheet({
+    required this.routes,
+    required this.onStart,
+    required this.onDismiss,
+    this.startingRouteId,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    final anyInFlight = startingRouteId != null;
+
+    return Container(
+      decoration: const BoxDecoration(
+        color: AppColors.surfaceWhite,
+        borderRadius: BorderRadius.vertical(top: Radius.circular(24)),
+      ),
+      padding: EdgeInsets.only(
+        left: 20,
+        right: 20,
+        top: 20,
+        bottom: MediaQuery.of(context).viewInsets.bottom + 24,
+      ),
+      child: Column(
+        mainAxisSize: MainAxisSize.min,
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          // ── Drag handle ─────────────────────────────────────────────────
+          Center(
+            child: Container(
+              width: 40,
+              height: 4,
+              margin: const EdgeInsets.only(bottom: 16),
+              decoration: BoxDecoration(
+                color: AppColors.cardBorder,
+                borderRadius: BorderRadius.circular(2),
+              ),
+            ),
+          ),
+
+          // ── Header ──────────────────────────────────────────────────────
+          const Text(
+            'Select route to start',
+            style: TextStyle(
+              fontSize: 18,
+              fontWeight: FontWeight.bold,
+              color: AppColors.primaryNavy,
+            ),
+          ),
+          const SizedBox(height: 4),
+          const Text(
+            'Parents will receive a \'Driver on the way\' notification.',
+            style: TextStyle(fontSize: 13, color: AppColors.textSecondary),
+          ),
+          const SizedBox(height: 16),
+
+          // ── Route list ──────────────────────────────────────────────────
+          ...routes.map((route) {
+            final isRecommended = route.isActiveNow == true;
+            final isStartingThis = startingRouteId == route.id;
+            final studentCount = route.students?.length ?? 0;
+            final timeLabel = route.startTime ?? '--:--';
+
+            return Padding(
+              padding: const EdgeInsets.only(bottom: 10),
+              child: Container(
+                padding: const EdgeInsets.all(14),
+                decoration: BoxDecoration(
+                  color: isRecommended
+                      ? AppColors.primaryBlueLight
+                      : AppColors.backgroundLight,
+                  borderRadius: BorderRadius.circular(14),
+                  border: Border.all(
+                    color: isRecommended
+                        ? AppColors.primaryBlue.withValues(alpha: 0.35)
+                        : AppColors.cardBorder,
+                  ),
+                ),
+                child: Row(
+                  children: [
+                    // Route info
+                    Expanded(
+                      child: Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          Row(
+                            children: [
+                              Text(
+                                route.name,
+                                style: const TextStyle(
+                                  fontWeight: FontWeight.bold,
+                                  fontSize: 14,
+                                  color: AppColors.primaryNavy,
+                                ),
+                              ),
+                              if (isRecommended) ...[
+                                const SizedBox(width: 6),
+                                Container(
+                                  padding: const EdgeInsets.symmetric(
+                                    horizontal: 8,
+                                    vertical: 2,
+                                  ),
+                                  decoration: BoxDecoration(
+                                    color: AppColors.accentTeal,
+                                    borderRadius: BorderRadius.circular(20),
+                                  ),
+                                  child: const Text(
+                                    'Recommended',
+                                    style: TextStyle(
+                                      color: AppColors.surfaceWhite,
+                                      fontSize: 10,
+                                      fontWeight: FontWeight.bold,
+                                    ),
+                                  ),
+                                ),
+                              ],
+                            ],
+                          ),
+                          const SizedBox(height: 4),
+                          Row(
+                            children: [
+                              const Icon(
+                                Icons.swap_horiz_rounded,
+                                size: 13,
+                                color: AppColors.textSecondary,
+                              ),
+                              const SizedBox(width: 4),
+                              Text(
+                                route.direction.shortLabel,
+                                style: const TextStyle(
+                                  fontSize: 12,
+                                  color: AppColors.textSecondary,
+                                ),
+                              ),
+                              const SizedBox(width: 10),
+                              const Icon(
+                                Icons.access_time_rounded,
+                                size: 13,
+                                color: AppColors.textSecondary,
+                              ),
+                              const SizedBox(width: 4),
+                              Text(
+                                timeLabel,
+                                style: const TextStyle(
+                                  fontSize: 12,
+                                  color: AppColors.textSecondary,
+                                ),
+                              ),
+                              const SizedBox(width: 10),
+                              const Icon(
+                                Icons.people_outline_rounded,
+                                size: 13,
+                                color: AppColors.textSecondary,
+                              ),
+                              const SizedBox(width: 4),
+                              Text(
+                                '$studentCount',
+                                style: const TextStyle(
+                                  fontSize: 12,
+                                  color: AppColors.textSecondary,
+                                ),
+                              ),
+                            ],
+                          ),
+                        ],
+                      ),
+                    ),
+                    const SizedBox(width: 12),
+                    // Start button
+                    SizedBox(
+                      width: 72,
+                      height: 36,
+                      child: ElevatedButton(
+                        key: Key('start_btn_${route.id}'),
+                        onPressed: anyInFlight ? null : () => onStart(route),
+                        style: ElevatedButton.styleFrom(
+                          minimumSize: Size.zero,
+                          padding: EdgeInsets.zero,
+                          backgroundColor: AppColors.accentTeal,
+                          foregroundColor: AppColors.surfaceWhite,
+                          disabledBackgroundColor:
+                              AppColors.accentTeal.withValues(alpha: 0.4),
+                          textStyle: const TextStyle(
+                            fontSize: 13,
+                            fontWeight: FontWeight.w600,
+                          ),
+                          shape: RoundedRectangleBorder(
+                            borderRadius: BorderRadius.circular(8),
+                          ),
+                        ),
+                        child: isStartingThis
+                            ? const SizedBox(
+                                width: 16,
+                                height: 16,
+                                child: CircularProgressIndicator(
+                                  strokeWidth: 2,
+                                  color: AppColors.surfaceWhite,
+                                ),
+                              )
+                            : const Text('Start'),
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+            );
+          }),
+
+          // ── Later button ─────────────────────────────────────────────────
+          const SizedBox(height: 4),
+          SizedBox(
+            width: double.infinity,
+            child: OutlinedButton(
+              key: const Key('start_route_later_btn'),
+              onPressed: anyInFlight ? null : onDismiss,
+              style: OutlinedButton.styleFrom(
+                minimumSize: const Size(0, 44),
+                foregroundColor: AppColors.textSecondary,
+                side: const BorderSide(color: AppColors.cardBorder),
+                shape: RoundedRectangleBorder(
+                  borderRadius: BorderRadius.circular(10),
+                ),
+              ),
+              child: const Text('Later'),
+            ),
           ),
         ],
       ),

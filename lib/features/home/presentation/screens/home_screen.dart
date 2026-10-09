@@ -15,6 +15,7 @@ class HomeScreen extends StatelessWidget {
   final ParentApiService? parentApiService;
   final DriverApiService? driverApiService;
   final StudentListNotifier? studentListNotifier;
+  final ValueNotifier<bool>? isOnDutyNotifier;
 
   const HomeScreen({
     super.key,
@@ -23,6 +24,7 @@ class HomeScreen extends StatelessWidget {
     this.parentApiService,
     this.driverApiService,
     this.studentListNotifier,
+    this.isOnDutyNotifier,
   });
 
   @override
@@ -35,6 +37,7 @@ class HomeScreen extends StatelessWidget {
       return DriverHomeView(
         authService: authService,
         driverApiService: driverApiService,
+        isOnDutyNotifier: isOnDutyNotifier ?? driverApiService?.isOnDutyNotifier,
       );
     }
     return ParentHomeView(

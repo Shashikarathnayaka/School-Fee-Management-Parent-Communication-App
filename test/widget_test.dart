@@ -58,7 +58,7 @@ class MockDriverApiService extends DriverApiService {
 }
 
 void main() {
-  group('N&D Smart SchoolPay Role-Based App Flow Tests', () {
+  group('Go School Role-Based App Flow Tests', () {
     late MockAuthService mockAuthService;
     late ActiveRoleNotifier activeRoleNotifier;
     late StudentListNotifier studentListNotifier;

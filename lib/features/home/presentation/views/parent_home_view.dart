@@ -53,7 +53,7 @@ class _ParentHomeViewState extends State<ParentHomeView>
   // ── Dashboard state ────────────────────────────────────────────────────────
   List<Fee> _fees = [];
   FeeSummary? _currentFee;
-  FeeSummary? _upcomingFee;
+  List<FeeSummary> _upcomingFees = [];
   List<PaymentRecord> _recentPayments = [];
   List<NotificationItem> _notifications = [];
   bool _isDashboardLoading = true;
@@ -65,6 +65,7 @@ class _ParentHomeViewState extends State<ParentHomeView>
   @override
   void initState() {
     super.initState();
+    WidgetsBinding.instance.addObserver(this);
     _initNotifier();
     _studentListNotifier.addListener(_onStudentListChanged);
     _syncSelectedStudent();
@@ -117,6 +118,7 @@ class _ParentHomeViewState extends State<ParentHomeView>
     setState(() {
       _syncSelectedStudent();
       _updateCurrentFee();
+      _updateUpcomingFees();
     });
   }
 
@@ -130,6 +132,18 @@ class _ParentHomeViewState extends State<ParentHomeView>
     } else {
       _selectedStudent = null;
     }
+  }
+
+  String _resolveStudentName(Fee fee) {
+    if (fee.studentName != null && fee.studentName!.trim().isNotEmpty) {
+      return fee.studentName!.trim();
+    }
+    final match =
+        _studentListNotifier.students.where((s) => s.id == fee.studentId);
+    if (match.isNotEmpty) {
+      return match.first.name;
+    }
+    return '';
   }
 
   static String _monthName(int month) {
@@ -185,20 +199,37 @@ class _ParentHomeViewState extends State<ParentHomeView>
     final dateStr = fee.dueDate != null
         ? '${fee.dueDate!.day} ${_monthName(fee.dueDate!.month)} ${fee.dueDate!.year}'
         : '';
-    final dueDateText = isUpcoming
+    String dueDateText = isUpcoming
         ? (dateStr.isNotEmpty ? 'Due $dateStr' : 'Upcoming')
         : (dateStr.isNotEmpty ? 'Due $dateStr' : 'Payment Due');
+
+    if (fee.tripsCount > 0) {
+      dueDateText = '$dueDateText • ${fee.tripsCount}/${fee.tripsTotal} trips';
+    }
 
     final formattedAmount =
         'Rs. ${fee.amount.toStringAsFixed(0).replaceAllMapped(RegExp(r'(\d{1,3})(?=(\d{3})+(?!\d))'), (m) => '${m[1]},')}';
 
+    final studentName = _resolveStudentName(fee);
+    final monthName = _fullMonthName(fee.month ?? DateTime.now().month);
+    final String title;
+    if (studentName.isNotEmpty) {
+      if (fee.description != null && fee.description!.isNotEmpty) {
+        title = '$studentName - ${fee.description}';
+      } else {
+        title = '$studentName - $monthName transport fee';
+      }
+    } else {
+      if (fee.description != null && fee.description!.isNotEmpty) {
+        title = fee.description!;
+      } else {
+        title = '$monthName transport fee';
+      }
+    }
+
     return FeeSummary(
       id: fee.id,
-      title: fee.description?.isNotEmpty == true
-          ? fee.description!
-          : (fee.studentName?.isNotEmpty == true
-                ? '${fee.studentName} - School Fee'
-                : 'School Fee'),
+      title: title,
       status: status,
       amount: formattedAmount,
       dueDate: dueDateText,
@@ -292,6 +323,56 @@ class _ParentHomeViewState extends State<ParentHomeView>
     );
   }
 
+  void _updateUpcomingFees() {
+    final now = DateTime.now();
+    final currentFeeId = _currentFee?.id;
+
+    // 1. Build a list of every UNPAID fee (status != PAID) for ALL of the
+    //    parent's children whose month/year is the current month/year.
+    final unpaidFees = _fees.where((f) {
+      if (f.status.toUpperCase() == 'PAID') return false;
+
+      // 2. Do not show the same fee twice: exclude the fee displayed in Current Fee card.
+      if (currentFeeId != null && currentFeeId.isNotEmpty && f.id == currentFeeId) {
+        return false;
+      }
+
+      // Check month & year against current month & year
+      final matchesMonth =
+          (f.month == now.month && (f.year == null || f.year == now.year)) ||
+          (f.dueDate != null &&
+              f.dueDate!.month == now.month &&
+              f.dueDate!.year == now.year);
+
+      if (!matchesMonth) return false;
+
+      // Keep existing rule that excludes extra-cycle fees (cycle > 1 in current month)
+      if (f.cycle > 1) return false;
+
+      return true;
+    }).toList();
+
+    // 3. Sort by due date (ascending), then by student name
+    unpaidFees.sort((a, b) {
+      if (a.dueDate != null && b.dueDate != null) {
+        final cmp = a.dueDate!.compareTo(b.dueDate!);
+        if (cmp != 0) return cmp;
+      } else if (a.dueDate != null) {
+        return -1;
+      } else if (b.dueDate != null) {
+        return 1;
+      }
+
+      final nameA = _resolveStudentName(a);
+      final nameB = _resolveStudentName(b);
+      return nameA.toLowerCase().compareTo(nameB.toLowerCase());
+    });
+
+    _upcomingFees = unpaidFees
+        .map((f) => _toFeeSummary(f, isUpcoming: true))
+        .toList();
+  }
+
   Future<void> _loadDashboardData({bool isRefresh = false}) async {
     if (!isRefresh) {
       setState(() {
@@ -320,30 +401,6 @@ class _ParentHomeViewState extends State<ParentHomeView>
 
       _fees = fees;
 
-      // Filter non-PAID fees for upcoming
-      final nowDate = DateTime.now();
-      final pendingFees = fees
-          .where((f) => f.status.toUpperCase() != 'PAID')
-          .where(
-            (f) =>
-                !(f.cycle > 1 &&
-                    f.month == nowDate.month &&
-                    f.year == nowDate.year),
-          )
-          .toList();
-
-      pendingFees.sort((a, b) {
-        if (a.dueDate == null && b.dueDate == null) return 0;
-        if (a.dueDate == null) return 1;
-        if (b.dueDate == null) return -1;
-        return a.dueDate!.compareTo(b.dueDate!);
-      });
-
-      FeeSummary? upcomingFee;
-      if (pendingFees.length > 1) {
-        upcomingFee = _toFeeSummary(pendingFees[1], isUpcoming: true);
-      }
-
       // Recent payments from PAID fees sorted by date desc
       final paidFees = fees
           .where((f) => f.status.toUpperCase() == 'PAID')
@@ -365,7 +422,7 @@ class _ParentHomeViewState extends State<ParentHomeView>
 
       setState(() {
         _updateCurrentFee();
-        _upcomingFee = upcomingFee;
+        _updateUpcomingFees();
         _recentPayments = recentPayments;
         _notifications = notifications;
         _isDashboardLoading = false;
@@ -795,19 +852,8 @@ class _ParentHomeViewState extends State<ParentHomeView>
                   RecentPaymentsCard(payments: _recentPayments),
                 const SizedBox(height: 24),
 
-                // Upcoming Fee
-                if (!_isDashboardLoading && _upcomingFee != null) ...[
-                  Text(
-                    AppStrings.upcomingFeeTitle,
-                    style: theme.textTheme.titleMedium?.copyWith(
-                      fontWeight: FontWeight.bold,
-                      color: AppColors.primaryNavy,
-                    ),
-                  ),
-                  const SizedBox(height: 12),
-                  UpcomingFeeCard(upcomingFee: _upcomingFee!),
-                  const SizedBox(height: 24),
-                ],
+                // Upcoming Fees
+                _buildUpcomingFeesSection(theme),
 
                 // Latest Updates
                 SectionHeader(
@@ -832,6 +878,91 @@ class _ParentHomeViewState extends State<ParentHomeView>
           ),
         ),
       ),
+    );
+  }
+
+  Widget _buildUpcomingFeesSection(ThemeData theme) {
+    if (_isDashboardLoading || _upcomingFees.isEmpty) {
+      return const SizedBox.shrink();
+    }
+
+    final displayFees = _upcomingFees.take(3).toList();
+    final hasMore = _upcomingFees.length > 3;
+
+    double totalAmount = 0.0;
+    for (final f in _upcomingFees) {
+      final clean = f.amount.replaceAll('Rs.', '').replaceAll(',', '').trim();
+      totalAmount += double.tryParse(clean) ?? 0.0;
+    }
+    final formattedTotal =
+        'Rs. ${totalAmount.toStringAsFixed(0).replaceAllMapped(RegExp(r'(\d{1,3})(?=(\d{3})+(?!\d))'), (m) => '${m[1]},')}';
+
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        Row(
+          mainAxisAlignment: MainAxisAlignment.spaceBetween,
+          children: [
+            Text(
+              AppStrings.upcomingFeeTitle,
+              style: theme.textTheme.titleMedium?.copyWith(
+                fontWeight: FontWeight.bold,
+                color: AppColors.primaryNavy,
+              ),
+            ),
+            if (hasMore)
+              TextButton(
+                key: const Key('upcoming_fees_view_all_btn'),
+                onPressed: () => context.go(AppRoutes.payments),
+                style: TextButton.styleFrom(
+                  padding: EdgeInsets.zero,
+                  minimumSize: Size.zero,
+                  tapTargetSize: MaterialTapTargetSize.shrinkWrap,
+                ),
+                child: const Text(
+                  'View all',
+                  style: TextStyle(
+                    fontSize: 13,
+                    fontWeight: FontWeight.w600,
+                    color: AppColors.primaryBlue,
+                  ),
+                ),
+              ),
+          ],
+        ),
+        const SizedBox(height: 12),
+        ...displayFees.map(
+          (fee) => Padding(
+            padding: const EdgeInsets.only(bottom: 10),
+            child: UpcomingFeeCard(upcomingFee: fee),
+          ),
+        ),
+        Padding(
+          padding: const EdgeInsets.only(top: 2, bottom: 8),
+          child: Row(
+            mainAxisAlignment: MainAxisAlignment.spaceBetween,
+            children: [
+              Text(
+                'Total this month: $formattedTotal',
+                style: const TextStyle(
+                  fontSize: 13,
+                  fontWeight: FontWeight.w600,
+                  color: AppColors.textSecondary,
+                ),
+              ),
+              if (_upcomingFees.length > 1)
+                Text(
+                  '${_upcomingFees.length} upcoming fees',
+                  style: const TextStyle(
+                    fontSize: 12,
+                    color: AppColors.textMuted,
+                  ),
+                ),
+            ],
+          ),
+        ),
+        const SizedBox(height: 16),
+      ],
     );
   }
 }

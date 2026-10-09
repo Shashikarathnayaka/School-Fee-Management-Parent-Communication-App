@@ -1,3 +1,6 @@
+import 'package:flutter/material.dart';
+
+import '../../../../app/theme/app_colors.dart';
 import '../../../../core/models/notification_model.dart';
 
 class NotificationItem {
@@ -6,6 +9,9 @@ class NotificationItem {
   final String message;
   final String time;
   final bool isRead;
+  final IconData? icon;
+  final Color? iconColor;
+  final Color? iconBackgroundColor;
 
   const NotificationItem({
     required this.id,
@@ -13,6 +19,9 @@ class NotificationItem {
     required this.message,
     required this.time,
     this.isRead = false,
+    this.icon,
+    this.iconColor,
+    this.iconBackgroundColor,
   });
 
   /// Shared relative-time formatter used by both [fromJson] and the
@@ -34,34 +43,57 @@ class NotificationItem {
   }
 
   factory NotificationItem.fromNotification(AppNotification n) {
+    final isDriverOnTheWay =
+        n.title.toLowerCase().contains('driver on the way');
     return NotificationItem(
       id: n.id,
       title: n.title,
       message: n.message,
       time: formatTime(n.createdAt),
       isRead: n.isRead,
+      icon: isDriverOnTheWay ? Icons.directions_bus_rounded : null,
+      iconColor: isDriverOnTheWay ? AppColors.accentTeal : null,
+      iconBackgroundColor: isDriverOnTheWay
+          ? AppColors.accentTeal.withValues(alpha: 0.12)
+          : null,
     );
   }
 
   factory NotificationItem.fromJson(Map<String, dynamic> json) {
     final createdAt = json['created_at'] ?? json['createdAt'];
     final dt = createdAt != null ? DateTime.tryParse(createdAt) : null;
+    final title = json['title'] ?? '';
+    final isDriverOnTheWay =
+        (title as String).toLowerCase().contains('driver on the way');
     return NotificationItem(
       id: json['id'] ?? '',
-      title: json['title'] ?? '',
+      title: title,
       message: json['message'] ?? '',
       time: formatTime(dt),
       isRead: json['is_read'] ?? json['isRead'] ?? false,
+      icon: isDriverOnTheWay ? Icons.directions_bus_rounded : null,
+      iconColor: isDriverOnTheWay ? AppColors.accentTeal : null,
+      iconBackgroundColor: isDriverOnTheWay
+          ? AppColors.accentTeal.withValues(alpha: 0.12)
+          : null,
     );
   }
 
-  NotificationItem copyWith({bool? isRead}) {
+  NotificationItem copyWith({
+    bool? isRead,
+    IconData? icon,
+    Color? iconColor,
+    Color? iconBackgroundColor,
+  }) {
     return NotificationItem(
       id: id,
       title: title,
       message: message,
       time: time,
       isRead: isRead ?? this.isRead,
+      icon: icon ?? this.icon,
+      iconColor: iconColor ?? this.iconColor,
+      iconBackgroundColor: iconBackgroundColor ?? this.iconBackgroundColor,
     );
   }
 }

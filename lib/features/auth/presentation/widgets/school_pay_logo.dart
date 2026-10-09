@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import '../../../../app/theme/app_colors.dart';
+import '../../../../core/constants/app_strings.dart';
 
 class SchoolPayLogo extends StatelessWidget {
   final double size;
@@ -72,7 +73,7 @@ class SchoolPayLogo extends StatelessWidget {
         if (showText) ...[
           const SizedBox(height: 14),
           Text(
-            'N&D Smart SchoolPay',
+            AppStrings.appName,
             textAlign: TextAlign.center,
             style: TextStyle(
               fontSize: size * 0.26,

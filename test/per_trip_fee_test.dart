@@ -379,6 +379,7 @@ void main() {
               'id': 'r_1',
               'name': 'Morning Bus',
               'status': 'SCHEDULED',
+              'is_active_now': true,
               'students': [
                 {
                   'id': 's_picked',

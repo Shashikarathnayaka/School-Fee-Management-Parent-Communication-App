@@ -6,11 +6,15 @@ import '../../domain/models/notification_item.dart';
 class NotificationPreviewCard extends StatelessWidget {
   final List<NotificationItem> notifications;
   final void Function(NotificationItem item)? onItemTap;
+  final void Function(NotificationItem item)? onItemDismissed;
+  final Future<bool> Function(NotificationItem item)? confirmDismiss;
 
   const NotificationPreviewCard({
     super.key,
     required this.notifications,
     this.onItemTap,
+    this.onItemDismissed,
+    this.confirmDismiss,
   });
 
   @override
@@ -48,43 +52,105 @@ class NotificationPreviewCard extends StatelessWidget {
         ),
         itemBuilder: (context, index) {
           final item = notifications[index];
-          return ListTile(
-            contentPadding: const EdgeInsets.symmetric(horizontal: 16, vertical: 4),
+          final isDriverOnTheWay =
+              item.title.toLowerCase().contains('driver on the way');
+          final iconData = item.icon ??
+              (isDriverOnTheWay
+                  ? Icons.directions_bus_rounded
+                  : (item.isRead
+                      ? Icons.notifications_none_rounded
+                      : Icons.notifications_active_rounded));
+          final iconColor = item.iconColor ??
+              (isDriverOnTheWay
+                  ? AppColors.accentTeal
+                  : (item.isRead
+                      ? AppColors.textSecondary
+                      : AppColors.primaryBlue));
+          final iconBgColor = item.iconBackgroundColor ??
+              (isDriverOnTheWay
+                  ? AppColors.accentTeal.withValues(alpha: 0.12)
+                  : (item.isRead
+                      ? AppColors.inputFill
+                      : AppColors.primaryBlueLight));
+
+          final hasDistinctTitle =
+              item.title.isNotEmpty && item.title != item.message;
+
+          final tile = ListTile(
+            contentPadding:
+                const EdgeInsets.symmetric(horizontal: 16, vertical: 4),
             onTap: onItemTap != null ? () => onItemTap!(item) : null,
             leading: Container(
               padding: const EdgeInsets.all(8),
               decoration: BoxDecoration(
-                color: item.isRead
-                    ? AppColors.inputFill
-                    : AppColors.primaryBlueLight,
+                color: iconBgColor,
                 shape: BoxShape.circle,
               ),
               child: Icon(
-                item.isRead
-                    ? Icons.notifications_none_rounded
-                    : Icons.notifications_active_rounded,
-                color: item.isRead
-                    ? AppColors.textSecondary
-                    : AppColors.primaryBlue,
+                iconData,
+                color: iconColor,
                 size: 18,
               ),
             ),
             title: Text(
-              item.message,
+              hasDistinctTitle ? item.title : item.message,
               style: TextStyle(
                 fontSize: 14,
                 fontWeight: item.isRead ? FontWeight.normal : FontWeight.w600,
-                color: AppColors.primaryNavy,
+                color: isDriverOnTheWay && !item.isRead
+                    ? AppColors.accentTeal
+                    : AppColors.primaryNavy,
               ),
             ),
-            subtitle: Text(
-              item.time,
-              style: const TextStyle(
-                fontSize: 12,
-                color: AppColors.textMuted,
-              ),
+            subtitle: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                if (hasDistinctTitle) ...[
+                  const SizedBox(height: 2),
+                  Text(
+                    item.message,
+                    style: const TextStyle(
+                      fontSize: 13,
+                      color: AppColors.textSecondary,
+                    ),
+                  ),
+                ],
+                const SizedBox(height: 2),
+                Text(
+                  item.time,
+                  style: const TextStyle(
+                    fontSize: 12,
+                    color: AppColors.textMuted,
+                  ),
+                ),
+              ],
             ),
           );
+
+          if (onItemDismissed != null || confirmDismiss != null) {
+            return Dismissible(
+              key: Key(item.id),
+              direction: DismissDirection.endToStart,
+              background: Container(
+                alignment: Alignment.centerRight,
+                padding: const EdgeInsets.only(right: 20),
+                color: AppColors.error,
+                child: const Icon(
+                  Icons.delete_outline_rounded,
+                  color: AppColors.surfaceWhite,
+                ),
+              ),
+              confirmDismiss: confirmDismiss != null
+                  ? (direction) => confirmDismiss!(item)
+                  : null,
+              onDismissed: onItemDismissed != null
+                  ? (_) => onItemDismissed!(item)
+                  : null,
+              child: tile,
+            );
+          }
+
+          return tile;
         },
       ),
     );

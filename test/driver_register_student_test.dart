@@ -484,6 +484,7 @@ void main() {
       );
 
       // Submit
+      await tester.ensureVisible(find.byType(AuthButton));
       await tester.tap(find.byType(AuthButton));
       await tester.pumpAndSettle();
 

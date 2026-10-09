@@ -352,7 +352,7 @@ class _ProfileScreenState extends State<ProfileScreen> {
               ),
               const SizedBox(height: 24),
               const Text(
-                'N&D Smart SchoolPay v1.0.0',
+                'Go School v1.0.0',
                 style: TextStyle(fontSize: 12, color: AppColors.textMuted),
               ),
             ],

@@ -21,6 +21,8 @@ class ApiConfig {
   static const String parentStudents = '$baseUrl/parent/students';
   static const String parentFees = '$baseUrl/parent/fees';
   static const String parentNotifications = '$baseUrl/parent/notifications';
+  static String parentNotification(String id) =>
+      '$baseUrl/parent/notifications/$id';
 
   // Driver Endpoints
   static const String driverProfile = '$baseUrl/driver/profile';
@@ -30,9 +32,15 @@ class ApiConfig {
   static const String driverPickup = '$baseUrl/driver/pickup';
   static const String driverHistory = '$baseUrl/driver/history';
   static const String driverNotifications = '$baseUrl/driver/notifications';
+  static String driverNotification(String id) =>
+      '$baseUrl/driver/notifications/$id';
   static const String driverStudents = '$baseUrl/driver/students';
   static const String driverStudentsByCode = '$baseUrl/driver/students/by-code';
   static const String driverFeesRemind = '$baseUrl/driver/fees/remind';
+
+  /// Returns the URL for POST /driver/routes/:routeId/start
+  static String driverRouteStart(String routeId) =>
+      '$baseUrl/driver/routes/$routeId/start';
 
   // Admin Endpoints
   static const String adminPickups = '$baseUrl/admin/pickups';
